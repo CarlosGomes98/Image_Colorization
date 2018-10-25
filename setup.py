@@ -1,7 +1,7 @@
 from setuptools import find_packages
 from setuptools import setup
 
-REQUIRED_PACKAGES = ['tensorflow', 'keras', 'numpy', 'scikit-image', 'docopt']
+REQUIRED_PACKAGES = ['tensorflow==1.8.0', 'keras', 'numpy', 'scikit-image', 'docopt', 'requests==2.18.0']
 
 setup(
     name='model.train_val_v2',

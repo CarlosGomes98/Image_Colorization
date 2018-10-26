@@ -2,7 +2,7 @@ import datetime
 from sklearn.model_selection import train_test_split
 from keras.models import Model, load_model
 from keras.layers import Input, UpSampling2D, Conv2D, Dense, Dropout, BatchNormalization, Flatten, Conv2DTranspose
-import os
+import os, sys
 from keras.preprocessing.image import img_to_array, load_img, ImageDataGenerator
 import numpy as np
 from skimage import io, color
@@ -123,10 +123,12 @@ class model:
 		)
 
 		val_datagen = ImageDataGenerator(rescale=(1./255))
+		# os.system('gsutil -m cp -r ' + self.image_path + '/Test .')
+		os.system('gsutil -m cp -r ' + self.image_path + '/Validation .')
 
 		batch_size = 64
 		def batch_generator(batch_size):
-		    for batch in datagen.flow_from_directory(self.image_path+"/Train",
+		    for batch in datagen.flow_from_directory("Validation",
 		                                             target_size=(image_size, image_size),
 		                                             class_mode="input",
 		                                             batch_size = batch_size):
@@ -136,7 +138,7 @@ class model:
 		        yield ([X, Y])
 		        
 		def val_batch_generator(batch_size):
-		    for batch in val_datagen.flow_from_directory(self.image_path+"/Validation",
+		    for batch in val_datagen.flow_from_directory("Validation",
 		                                             target_size=(image_size, image_size),
 		                                             class_mode="input",
 		                                             batch_size = batch_size):
@@ -148,15 +150,20 @@ class model:
 		model.summary()
 
 		class WeightsSaver(Callback):
-		    def __init__(self, N):
-		        self.N = N
-		        self.batch = 0
+			def __init__(self, N, output_path):
+				self.N = N
+				self.output_path = output_path
+				self.batch = 0
 
-		    def on_batch_end(self, batch, logs={}):
-		        if self.batch % self.N == 0:
-		            name = 'currentWeights.h5'
-		            self.model.save_weights(self.output_path + "/" + name)
-		        self.batch += 1
+			def on_batch_end(self, batch, logs={}):
+				if self.batch % self.N == 0:
+					name = 'currentWeights.h5'
+					self.model.save_weights(name)
+					try:
+						os.system('gsutil cp ' + name + ' ' + self.output_path)
+					except:
+						print("Could not upload current weights")
+				self.batch += 1
 		        
 		checkpoint = ModelCheckpoint("best.hdf5",
 		                            monitor="accuracy",
@@ -164,7 +171,7 @@ class model:
 		                            save_best_only=True,
 		                            mode="max")
 
-		every_20_batches = WeightsSaver(20)
+		every_20_batches = WeightsSaver(20, self.output_path)
 
 		every_10 = ModelCheckpoint("latest.hdf5",
 		                          monitor="accuracy",
@@ -186,13 +193,17 @@ class model:
 		# os.mkdir(outputDate)
 		# os.chdir(outputDate)
 		try:
-		    model.save_weights(self.output_path+"/model_weights.h5")
+			model.save_weights("model_weights.h5")	
+			model.save("model.h5")
 		# else:
 		#     model.load_weights("/floyd/input/model/my_model_weights.h5")
 		except:
-		    print("Could not save")
-
-		model.save(self.output_path+"/model.h5")
+			print("Could not save")
+		
+		os.system('gsutil cp model_weights.h5 ' + self.output_path)
+		os.system('gsutil cp model.h5 ' + self.output_path)
+		os.system('gsutil cp best.hdf5 ' + self.output_path)
+		os.system('gsutil cp latest.h5 ' + self.output_path)
 
 
 	# In[ ]:

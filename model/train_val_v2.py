@@ -34,8 +34,8 @@ def printOutput(file, output):
 	file.close()
 
 def preprocess(examples):
-	examples = examples*(1.0/255)
-	examples = color.rgb2lab(examples)
+	#examples = examples*(1.0/255)
+	#examples = color.rgb2lab(examples)
 	#examples = meanCenter(Xtrain, examples)
 	examples = examples[:, :, :, 0]
 	examples = examples/100
@@ -113,15 +113,7 @@ class model:
 		return Model(inputs=model_input, outputs=model_output)
 
 	def train(self, model):
-		datagen = ImageDataGenerator(
-		    #featurewise_center=True,
-		    #samplewise_center=False,
-		    shear_range=0.4,
-		    zoom_range=0.4,
-		    rotation_range=40,
-		    horizontal_flip=True,
-		    rescale=(1./255)
-		)
+		datagen = ImageDataGenerator(rescale=(1./255))
 
 		val_datagen = ImageDataGenerator(rescale=(1./255))
 		os.system('gsutil -m cp -r ' + self.image_path + '/Train .')

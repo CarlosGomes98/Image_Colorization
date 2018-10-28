@@ -9,7 +9,8 @@ from skimage import io, color
 from keras.preprocessing import image
 import tensorflow as tf
 from keras.callbacks import TensorBoard, ModelCheckpoint, Callback
-
+from tensorflow.python.client import device_lib
+print(device_lib.list_local_devices())
 image_size = 256
 
 def read_image(img_id, dir):
@@ -37,8 +38,8 @@ def preprocess(examples):
 	examples = color.rgb2lab(examples)
 	#examples = meanCenter(Xtrain, examples)
 	examples = examples[:, :, :, 0]
-	examples = examples - 50
 	examples = examples/100
+	examples = examples - 0.5
 	examples = examples.reshape(examples.shape+(1,))
 	return examples
 
@@ -123,12 +124,12 @@ class model:
 		)
 
 		val_datagen = ImageDataGenerator(rescale=(1./255))
-		# os.system('gsutil -m cp -r ' + self.image_path + '/Test .')
+		os.system('gsutil -m cp -r ' + self.image_path + '/Train .')
 		os.system('gsutil -m cp -r ' + self.image_path + '/Validation .')
 
-		batch_size = 64
+		batch_size = 32
 		def batch_generator(batch_size):
-		    for batch in datagen.flow_from_directory("Validation",
+		    for batch in datagen.flow_from_directory("Train",
 		                                             target_size=(image_size, image_size),
 		                                             class_mode="input",
 		                                             batch_size = batch_size):

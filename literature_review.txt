@@ -1,0 +1,9 @@
+!!!Colorful image Colorization   https://arxiv.org/pdf/1603.08511.pdf
+
+!!! Learning Representations for Automatic Colorization http://arxiv.org/pdf/1603.06668.pdf
+
+!!!!Let there be Color(Original fusion model) http://iizuka.cs.tsukuba.ac.jp/projects/colorization/data/colorization_sig2016.pdf
+
+Deep Koalarization(fusion model) https://arxiv.org/pdf/1712.03400v1.pdf
+
+Pixel level Semantics Guided Image Colorization https://arxiv.org/pdf/1808.01597v1.pdf

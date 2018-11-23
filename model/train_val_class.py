@@ -9,8 +9,10 @@ from skimage import io, color
 from keras.preprocessing import image
 import tensorflow as tf
 from keras.callbacks import TensorBoard, ModelCheckpoint, Callback
+from utilities.utilities import read_image, show_image, preprocess, convLayer, bucketize_gaussian
 from tensorflow.python.client import device_lib
 print(device_lib.list_local_devices())
+
 image_size = 256
 
 def read_image(img_id, dir):
@@ -48,13 +50,12 @@ def meanCenter(trainData, dataToCenter):
 	mean[:, :, 1:] = 0 #center only the lightness channel, which is the input
 	return dataToCenter - mean
 
-def convLayer(input, filters, kernel_size,  stride=1):
-	return Conv2D(filters, kernel_size, padding="same", activation="relu", strides=stride)(input)
+def convLayer(input, filters, kernel_size, dilation=1, stride=1):
+	return Conv2D(filters, kernel_size, padding="same", activation="relu", dilation_rate=dilation, strides=stride)(input)
 
 class model:
 	image_path=""
 	output_path=""
-	
 	def __init__(self, image_path, output_path):
 		self.image_path = image_path
 		self.output_path = output_path
@@ -73,43 +74,55 @@ class model:
 	# 	test = color.rgb2lab(test)
 	# 	test = preprocess(test)
 	# 	return test
-	
+
 	def set_up_model(self):
 		input_shape = (image_size, image_size, 1)
 
 		model_input = Input(shape = input_shape)
 
+		# conv1
 		model_output = convLayer(model_input, 64, (3, 3))
 		model_output = convLayer(model_output, 64, (3, 3), stride=2)
 		model_output = BatchNormalization()(model_output)
-
+		# conv2
 		model_output = convLayer(model_output, 128, (3, 3))
 		model_output = convLayer(model_output, 128, (3, 3), stride=2)
 		model_output = BatchNormalization()(model_output)
-
+		# conv3
+		model_output = convLayer(model_output, 256, (3, 3))
 		model_output = convLayer(model_output, 256, (3, 3))
 		model_output = convLayer(model_output, 256, (3, 3), stride=2)
 		model_output = BatchNormalization()(model_output)
-
+		# conv4
 		model_output = convLayer(model_output, 512, (3, 3))
-		model_output = convLayer(model_output, 512, (3, 3))
-		model_output = BatchNormalization()(model_output)
-
 		model_output = convLayer(model_output, 512, (3, 3))
 		model_output = convLayer(model_output, 512, (3, 3))
 		model_output = BatchNormalization()(model_output)
-
-		model_output = UpSampling2D((2, 2))(model_output) #not sure if this or deconvolution
+		# conv5
+		model_output = convLayer(model_output, 512, (3, 3), dilation=2)
+		model_output = convLayer(model_output, 512, (3, 3), dilation=2)
+		model_output = convLayer(model_output, 512, (3, 3), dilation=2)
+		model_output = BatchNormalization()(model_output)
+		# conv6
+		model_output = convLayer(model_output, 512, (3, 3), dilation=2)
+		model_output = convLayer(model_output, 512, (3, 3), dilation=2)
+		model_output = convLayer(model_output, 512, (3, 3), dilation=2)
+		model_output = BatchNormalization()(model_output)
+		# conv7
+		model_output = convLayer(model_output, 256, (3, 3))
+		model_output = convLayer(model_output, 256, (3, 3))
 		model_output = convLayer(model_output, 256, (3, 3))
 		model_output = BatchNormalization()(model_output)
+		# conv8
+		model_output = UpSampling2D((2, 2))(model_output)
+		model_output = convLayer(model_output, 256, (3, 3), stride=2)
+		model_output = UpSampling2D((2, 2))(model_output)
+		model_output = convLayer(model_output, 256, (3, 3), stride=2)
+		model_output = UpSampling2D((2, 2))(model_output)
+		model_output = convLayer(model_output, 256, (3, 3), stride=2)
 
-		model_output = UpSampling2D((2, 2))(model_output) 
-		model_output = convLayer(model_output, 64, (3, 3))
-		model_output = BatchNormalization()(model_output)
-
-		model_output = UpSampling2D((2, 2))(model_output) 
-		model_output = Conv2D(2, (3, 3), activation="tanh", padding="same")(model_output)
-
+		# unary prediction
+		model_output = convLayer(model_output, 313, (1, 1), padding="same", activation="softmax")(model_output)
 		return Model(inputs=model_input, outputs=model_output)
 
 	def train(self, model):
@@ -118,7 +131,11 @@ class model:
 		val_datagen = ImageDataGenerator(rescale=(1./255))
 		os.system('gsutil -m cp -r ' + self.image_path + '/Train .')
 		os.system('gsutil -m cp -r ' + self.image_path + '/Validation .')
+		os.system('gsutil -m cp -r ' + self.image_path + '/pts_in_hull.npy .')
+		os.system('gsutil -m cp -r ' + self.image_path + '/prior_probs.npy .')
 
+		buckets = np.load("pts_in_hull.npy")
+		priors = np.load("prior_probs.npy")
 		batch_size = 32
 		def batch_generator(batch_size):
 		    for batch in datagen.flow_from_directory("Train",
@@ -128,8 +145,10 @@ class model:
 		        lab = color.rgb2lab(batch[0])
 		        X = preprocess(lab)
 		        Y = lab[:, :, :, 1:] / 128
+				Y = bucketize_gaussian(Y, buckets, batch_size)
+				# multiply_by_priors
 		        yield ([X, Y])
-		        
+
 		def val_batch_generator(batch_size):
 		    for batch in val_datagen.flow_from_directory("Validation",
 		                                             target_size=(image_size, image_size),
@@ -138,6 +157,8 @@ class model:
 		        lab = color.rgb2lab(batch[0])
 		        X = preprocess(lab)
 		        Y = lab[:, :, :, 1:] / 128
+				Y = bucketize_gaussian(Y, buckets, batch_size)
+				# multiply_by_priors
 		        yield ([X, Y])
 
 		model.summary()
@@ -157,7 +178,7 @@ class model:
 					except:
 						print("Could not upload current weights")
 				self.batch += 1
-		        
+
 		checkpoint = ModelCheckpoint("best.hdf5",
 		                            monitor="accuracy",
 		                            verbose=1,
@@ -175,7 +196,7 @@ class model:
 
 		tensorboard = TensorBoard(log_dir=".")
 		callbacks = [tensorboard, checkpoint, every_10, every_20_batches]
-		model.compile(loss='mean_squared_error',
+		model.compile(loss='categorical_crossentropy',
 		            optimizer="adam",
 		            metrics=['accuracy'])
 
@@ -186,13 +207,13 @@ class model:
 		# os.mkdir(outputDate)
 		# os.chdir(outputDate)
 		try:
-			model.save_weights("model_weights.h5")	
+			model.save_weights("model_weights.h5")
 			model.save("model.h5")
 		# else:
 		#     model.load_weights("/floyd/input/model/my_model_weights.h5")
 		except:
 			print("Could not save")
-		
+
 		os.system('gsutil cp model_weights.h5 ' + self.output_path)
 		os.system('gsutil cp model.h5 ' + self.output_path)
 		os.system('gsutil cp best.hdf5 ' + self.output_path)
@@ -235,7 +256,7 @@ class model:
 	        X = preprocess(lab)
 	        Y = lab[:, :, :, 1:] / 128
 	        yield ([X, Y])
-	        
+
 	model.summary()
 
 	outputDate = now.strftime("%Y-%m-%d %H:%M")
@@ -253,7 +274,7 @@ class model:
 	            name = 'currentWeights.h5'
 	            self.model.save_weights(name)
 	        self.batch += 1
-	        
+
 	checkpoint = ModelCheckpoint("best.hdf5",
 	                            monitor="accuracy",
 	                            verbose=1,

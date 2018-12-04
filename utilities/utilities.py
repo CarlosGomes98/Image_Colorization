@@ -1,11 +1,11 @@
-from keras.preprocessing.image import img_to_array, load_img, ImageDataGenerator
 import numpy as np
+from keras.preprocessing.image import img_to_array, load_img, ImageDataGenerator
+from keras.layers import Conv2D
 from skimage import io, color, transform
 from sklearn.neighbors import NearestNeighbors
 from scipy.spatial.distance import cdist
 from matplotlib import pyplot as plt
 import os
-from utilities.utilities import read_image, show_image, preprocess, convLayer
 image_size = 256
 
 def read_image(img_id, dir):
@@ -28,19 +28,15 @@ def printOutput(file, output):
         file.write(row + "\n")
     file.close()
 
-def preprocess(examples):
-    examples = examples*(1.0/255)
-    examples = color.rgb2lab(examples)
+def preprocess_and_return_X(examples):
     examples = examples[:, :, :, 0]
     examples = examples - 50
     examples = examples/100
     examples = examples.reshape(examples.shape+(1,))
     return examples
 
-def meanCenter(trainData, dataToCenter):
-    mean = np.mean(trainData, 0, dtype=np.float32)
-    mean[:, :, 1:] = 0 #center only the lightness channel, which is the input
-    return dataToCenter - mean
+def convLayer(input, filters, kernel_size, dilation=1, stride=1):
+    return Conv2D(filters, kernel_size, padding="same", activation="relu", dilation_rate=dilation, strides=stride)(input)
 
 def bucketize_gaussian(images, buckets, batch_size):
     #get ab channels only

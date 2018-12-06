@@ -16,8 +16,6 @@ from utilities import read_image, show_image, preprocess_and_return_X, convLayer
 image_size = 256
 
 class model:
-    image_path=""
-    output_path=""
     def __init__(self, image_path, output_path):
         self.image_path = image_path
         self.output_path = output_path
@@ -153,7 +151,7 @@ class model:
                     optimizer="adam",
                     metrics=['accuracy'])
 
-        model.fit_generator(batch_generator(batch_size), epochs=100, steps_per_epoch=2) #5132 steps per epoch
+        model.fit_generator(batch_generator(batch_size), epochs=1, steps_per_epoch=2) #5132 steps per epoch
 
         # outputDate = now.strftime("%Y-%m-%d %Hh%Mm")
         # os.chdir("output")

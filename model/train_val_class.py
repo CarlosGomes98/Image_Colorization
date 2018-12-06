@@ -121,6 +121,7 @@ class model:
                                                      batch_size = batch_size):
                 lab = color.rgb2lab(batch[0])
                 X = preprocess_and_return_X(lab)
+                Y = lab[:, :, :, 1:]
                 Y = bucketize_gaussian(Y, buckets, batch_size)
                 Y = Y.reshape((batch_size, image_size*image_size, 313))                
                 yield ([X, Y])

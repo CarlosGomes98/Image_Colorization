@@ -57,14 +57,14 @@ class model:
         model_output = BatchNormalization()(model_output)
         # conv4
         # model_output = convLayer(model_output, 512, (3, 3))
-        # model_output = convLayer(model_output, 512, (3, 3))
+        model_output = convLayer(model_output, 512, (3, 3))
         model_output = convLayer(model_output, 512, (3, 3))
         model_output = BatchNormalization()(model_output)
         # conv5
         # model_output = convLayer(model_output, 512, (3, 3), dilation=2)
         # model_output = convLayer(model_output, 512, (3, 3), dilation=2)
         # model_output = convLayer(model_output, 512, (3, 3), dilation=2)
-        model_output = BatchNormalization()(model_output)
+        # model_output = BatchNormalization()(model_output)
         # conv6
         # model_output = convLayer(model_output, 512, (3, 3), dilation=2)
         # model_output = convLayer(model_output, 512, (3, 3), dilation=2)
@@ -108,7 +108,6 @@ class model:
                                                      batch_size = batch_size):
                 lab = color.rgb2lab(batch[0])
                 X = preprocess_and_return_X(lab)
-                Y = lab[:, :, :, 1:] / 128
                 Y = bucketize_gaussian(Y, buckets, batch_size)
                 Y = Y * rebalance
                 Y = Y.reshape((batch_size, image_size*image_size, 313))
@@ -147,21 +146,21 @@ class model:
 
         tensorboard = TensorBoard(log_dir=".")
         callbacks = [tensorboard, checkpoint, every_10, every_20_batches]
-        model.load_weights("D:/Libraries/Documents/Image_Colorization/output/model_weights.h5")
+        # model.load_weights("D:/Libraries/Documents/Image_Colorization/output/model_weights.h5")
 
         model.compile(loss='categorical_crossentropy',
                     optimizer="adam",
                     metrics=['accuracy'])
 
-        model.fit_generator(batch_generator(batch_size), epochs=200, steps_per_epoch=2) #5132 steps per epoch
+        model.fit_generator(batch_generator(batch_size), epochs=100, steps_per_epoch=2) #5132 steps per epoch
 
         # outputDate = now.strftime("%Y-%m-%d %Hh%Mm")
         # os.chdir("output")
         # os.mkdir(outputDate)
         # os.chdir(outputDate)
         try:
-            model.save_weights("model_weights.h5")
-            model.save("model.h5")
+            model.save_weights(self.output_path + "/model_weights.h5")
+            model.save(self.output_path + "/model.h5")
         # else:
         #     model.load_weights("/floyd/input/model/my_model_weights.h5")
         except:

@@ -1,7 +1,7 @@
 import datetime
 from sklearn.model_selection import train_test_split
 from keras.models import Model, load_model
-from keras.layers import Input, UpSampling2D, Conv2D, Dense, Dropout, BatchNormalization, Flatten, Conv2DTranspose
+from keras.layers import Input, UpSampling2D, Conv2D, Conv1D, Dense, Dropout, BatchNormalization, Flatten, Conv2DTranspose, Reshape
 import os, sys
 from keras.preprocessing.image import img_to_array, load_img, ImageDataGenerator
 import numpy as np
@@ -9,7 +9,7 @@ from skimage import io, color
 from keras.preprocessing import image
 import tensorflow as tf
 from keras.callbacks import TensorBoard, ModelCheckpoint, Callback
-from model.utilities import read_image, show_image, preprocess_and_return_X, convLayer, bucketize_gaussian
+from utilities import read_image, show_image, preprocess_and_return_X, convLayer, bucketize_gaussian
 # from tensorflow.python.client import device_lib
 # print(device_lib.list_local_devices())
 
@@ -77,14 +77,15 @@ class model:
         model_output = BatchNormalization()(model_output)
         # conv8
         model_output = UpSampling2D((2, 2))(model_output)
-        model_output = convLayer(model_output, 256, (3, 3), stride=2)
+        model_output = convLayer(model_output, 256, (3, 3))
         model_output = UpSampling2D((2, 2))(model_output)
-        model_output = convLayer(model_output, 256, (3, 3), stride=2)
+        model_output = convLayer(model_output, 256, (3, 3))
         model_output = UpSampling2D((2, 2))(model_output)
-        model_output = convLayer(model_output, 256, (3, 3), stride=2)
+        model_output = convLayer(model_output, 256, (3, 3))
 
         # unary prediction
-        model_output = Conv2D(313, (1, 1), padding="same", activation="softmax")(model_output)
+        reshaped_output = Reshape((image_size*image_size, 256))(model_output)
+        model_output = Conv1D(313, (1), padding="same", activation="softmax")(reshaped_output)
         return Model(inputs=model_input, outputs=model_output)
 
     def train(self, model):
@@ -110,6 +111,7 @@ class model:
                 Y = lab[:, :, :, 1:] / 128
                 Y = bucketize_gaussian(Y, buckets, batch_size)
                 Y = Y * rebalance
+                Y = Y.reshape((batch_size, image_size*image_size, 313))
                 yield ([X, Y])
 
         def val_batch_generator(batch_size):
@@ -121,6 +123,7 @@ class model:
                 X = preprocess_and_return_X(lab)
                 Y = lab[:, :, :, 1:] / 128
                 Y = bucketize_gaussian(Y, buckets, batch_size)
+                Y = Y.reshape((batch_size, image_size*image_size, 313))                
                 yield ([X, Y])
 
         model.summary()

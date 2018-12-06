@@ -8,7 +8,7 @@ Options:
 """
 from docopt import docopt
 
-from model.train_val_class import model
+from train_val_class_test import model
 
 if __name__ == '__main__':
     arguments = docopt(__doc__)

@@ -6,7 +6,7 @@ from sklearn.neighbors import NearestNeighbors
 from scipy.spatial.distance import cdist
 from matplotlib import pyplot as plt
 import os
-image_size = 256
+image_size = 128
 
 def read_image(img_id, dir):
     try:

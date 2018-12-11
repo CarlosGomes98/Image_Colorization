@@ -13,7 +13,7 @@ from model.utilities import read_image, show_image, preprocess_and_return_X, con
 # from tensorflow.python.client import device_lib
 # print(device_lib.list_local_devices())
 
-image_size = 256
+image_size = 128
 
 class model:
     def __init__(self, image_path, output_path):
@@ -100,7 +100,8 @@ class model:
         #download rebalance factors and quantization files
         rebalance = np.load("rebalance.npy")
         buckets = np.load("pts_in_hull.npy")
-        batch_size = 32
+        
+        batch_size = 16
         def batch_generator(batch_size):
             for batch in datagen.flow_from_directory("Train",
                                                      target_size=(image_size, image_size),
@@ -165,7 +166,7 @@ class model:
                     optimizer="adam",
                     metrics=['accuracy'])
 
-        model.fit_generator(batch_generator(batch_size), callbacks=callbacks, epochs=3, steps_per_epoch=4040, validation_data=val_batch_generator(batch_size), validation_steps=157) #5132 steps per epoch
+        model.fit_generator(batch_generator(batch_size), callbacks=callbacks, epochs=8, steps_per_epoch=16156, validation_data=val_batch_generator(batch_size), validation_steps=625) #5132 steps per epoch
 
         # outputDate = now.strftime("%Y-%m-%d %Hh%Mm")
         # os.chdir("output")

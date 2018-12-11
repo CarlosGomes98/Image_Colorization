@@ -5,4 +5,4 @@ gsutil -m cp -r data gs://$BUCKET_NAME/data
 
 gcloud ml-engine jobs submit training MSE_Train_4 --job-dir gs://image-colorization-217316-places/MSE_Train_4 --runtime-version 1.8 --module-name model.task --package-path model --region europe-west1 --python-version 3.5 --scale-tier BASIC_GPU --verbosity debug -- --image-path gs://image-colorization-217316-places
 
-gcloud ml-engine jobs submit training Class_Train_1 --job-dir gs://image-colorization-217316-places/Class_Train_1 --runtime-version 1.8 --module-name model.task --package-path model --region europe-west1 --python-version 3.5 --scale-tier BASIC_GPU --verbosity debug -- --image-path gs://image-colorization-217316-places
+gcloud ml-engine jobs submit training Class_Train_2_7 --job-dir gs://image-colorization-217316-places/Class_Train_2_7 --runtime-version 1.8 --module-name model.task --package-path model --region europe-west1 --python-version 3.5 --scale-tier BASIC_GPU --verbosity debug -- --image-path gs://image-colorization-217316-places

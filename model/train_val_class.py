@@ -9,18 +9,18 @@ from skimage import io, color
 from keras.preprocessing import image
 import tensorflow as tf
 from keras.callbacks import TensorBoard, ModelCheckpoint, Callback
-from utilities import read_image, show_image, preprocess_and_return_X, convLayer, bucketize_gaussian
+from model.utilities import read_image, show_image, preprocess_and_return_X, convLayer, bucketize_gaussian
 # from tensorflow.python.client import device_lib
 # print(device_lib.list_local_devices())
 
 image_size = 256
 
 class model:
-    image_path=""
-    output_path=""
     def __init__(self, image_path, output_path):
         self.image_path = image_path
         self.output_path = output_path
+        print("Image path: " + image_path)
+        print("Output path: " + output_path)
 
     # def prepare_test_data(self):
     #     test = []
@@ -92,17 +92,17 @@ class model:
         datagen = ImageDataGenerator(rescale=(1./255))
         val_datagen = ImageDataGenerator(rescale=(1./255))
 
-        # os.system('gsutil -m cp -r ' + self.image_path + '/Train .')
-        # os.system('gsutil -m cp -r ' + self.image_path + '/Validation .')
-        # os.system('gsutil -m cp -r ' + self.image_path + '/pts_in_hull.npy .')
-        # os.system('gsutil -m cp -r ' + self.image_path + '/prior_probs.npy .')
-        
+        os.system('gsutil -m cp -r ' + self.image_path + '/Train .')
+        os.system('gsutil -m cp -r ' + self.image_path + '/Validation .')
+        os.system('gsutil cp ' + self.image_path + '/pts_in_hull.npy .')
+        os.system('gsutil cp ' + self.image_path + '/rebalance.npy .')
+        print(os.listdir())
         #download rebalance factors and quantization files
-        rebalance = np.load("model/rebalance.npy")
-        buckets = np.load("model/pts_in_hull.npy")
+        rebalance = np.load("rebalance.npy")
+        buckets = np.load("pts_in_hull.npy")
         batch_size = 32
         def batch_generator(batch_size):
-            for batch in datagen.flow_from_directory("data/Train",
+            for batch in datagen.flow_from_directory("Train",
                                                      target_size=(image_size, image_size),
                                                      class_mode="input",
                                                      batch_size = batch_size):
@@ -115,7 +115,7 @@ class model:
                 yield ([X, Y])
 
         def val_batch_generator(batch_size):
-            for batch in val_datagen.flow_from_directory("data/Validation",
+            for batch in val_datagen.flow_from_directory("Validation",
                                                      target_size=(image_size, image_size),
                                                      class_mode="input",
                                                      batch_size = batch_size):
@@ -179,10 +179,10 @@ class model:
         except:
             print("Could not save")
 
-        # os.system('gsutil cp model_weights.h5 ' + self.output_path)
-        # os.system('gsutil cp model.h5 ' + self.output_path)
-        # os.system('gsutil cp best.hdf5 ' + self.output_path)
-        # os.system('gsutil cp latest.h5 ' + self.output_path)
+        os.system('gsutil cp model_weights.h5 ' + self.output_path)
+        os.system('gsutil cp model.h5 ' + self.output_path)
+        os.system('gsutil cp best.hdf5 ' + self.output_path)
+        os.system('gsutil cp latest.h5 ' + self.output_path)
 
 
     # In[ ]:

@@ -9,7 +9,7 @@ from skimage import io, color
 from keras.preprocessing import image
 import tensorflow as tf
 from keras.callbacks import TensorBoard, ModelCheckpoint, Callback
-from utilities import read_image, show_image, preprocess_and_return_X, convLayer, bucketize_gaussian
+from model.utilities import read_image, show_image, preprocess_and_return_X, convLayer, bucketize_gaussian
 # from tensorflow.python.client import device_lib
 # print(device_lib.list_local_devices())
 
@@ -151,7 +151,7 @@ class model:
                     optimizer="adam",
                     metrics=['accuracy'])
 
-        model.fit_generator(batch_generator(batch_size), epochs=1, steps_per_epoch=2) #5132 steps per epoch
+        model.fit_generator(batch_generator(batch_size), epochs=150, steps_per_epoch=2) #5132 steps per epoch
 
         # outputDate = now.strftime("%Y-%m-%d %Hh%Mm")
         # os.chdir("output")

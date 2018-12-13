@@ -10,10 +10,15 @@ from keras.preprocessing import image
 import tensorflow as tf
 from keras.callbacks import TensorBoard, ModelCheckpoint, Callback
 from model.utilities import read_image, show_image, preprocess_and_return_X, convLayer, bucketize_gaussian
-# from tensorflow.python.client import device_lib
-# print(device_lib.list_local_devices())
+from tensorflow.python.client import device_lib
+print(device_lib.list_local_devices())
 
 image_size = 128
+if tf.test.gpu_device_name():
+    print('Default GPU: {}'.format(tf.test.gpu_device_name()))
+else:
+    print('Failed to find default GPU.')
+    sys.exit(1)
 
 class model:
     def __init__(self, image_path, output_path):
@@ -51,27 +56,27 @@ class model:
         model_output = convLayer(model_output, 128, (3, 3), stride=2)
         model_output = BatchNormalization()(model_output)
         # conv3
-        model_output = convLayer(model_output, 256, (3, 3))
+        # model_output = convLayer(model_output, 256, (3, 3))
         model_output = convLayer(model_output, 256, (3, 3))
         model_output = convLayer(model_output, 256, (3, 3), stride=2)
         model_output = BatchNormalization()(model_output)
         # conv4
-        model_output = convLayer(model_output, 512, (3, 3))
+        # model_output = convLayer(model_output, 512, (3, 3))
         model_output = convLayer(model_output, 512, (3, 3))
         model_output = convLayer(model_output, 512, (3, 3))
         model_output = BatchNormalization()(model_output)
         # conv5
-        model_output = convLayer(model_output, 512, (3, 3), dilation=2)
+        # model_output = convLayer(model_output, 512, (3, 3), dilation=2)
         model_output = convLayer(model_output, 512, (3, 3), dilation=2)
         model_output = convLayer(model_output, 512, (3, 3), dilation=2)
         model_output = BatchNormalization()(model_output)
         # conv6
-        model_output = convLayer(model_output, 512, (3, 3), dilation=2)
+        # model_output = convLayer(model_output, 512, (3, 3), dilation=2)
         model_output = convLayer(model_output, 512, (3, 3), dilation=2)
         model_output = convLayer(model_output, 512, (3, 3), dilation=2)
         model_output = BatchNormalization()(model_output)
         # conv7
-        model_output = convLayer(model_output, 256, (3, 3))
+        # model_output = convLayer(model_output, 256, (3, 3))
         model_output = convLayer(model_output, 256, (3, 3))
         model_output = convLayer(model_output, 256, (3, 3))
         model_output = BatchNormalization()(model_output)
@@ -101,12 +106,14 @@ class model:
         rebalance = np.load("rebalance.npy")
         buckets = np.load("pts_in_hull.npy")
         
-        batch_size = 16
+        batch_size = 32
+        #make your own generator!!!
         def batch_generator(batch_size):
             for batch in datagen.flow_from_directory("Train",
                                                      target_size=(image_size, image_size),
                                                      class_mode="input",
-                                                     batch_size = batch_size):
+                                                     batch_size = batch_size, 
+                                                     shuffle = False):
                 lab = color.rgb2lab(batch[0])
                 X = preprocess_and_return_X(lab)
                 Y = lab[:, :, :, 1:]
@@ -151,7 +158,7 @@ class model:
                                     save_best_only=True,
                                     mode="max")
 
-        every_20_batches = WeightsSaver(20, self.output_path)
+        every_20_batches = WeightsSaver(1000, self.output_path)
 
         every_10 = ModelCheckpoint("latest.hdf5",
                                   monitor="accuracy",
@@ -166,7 +173,8 @@ class model:
                     optimizer="adam",
                     metrics=['accuracy'])
 
-        model.fit_generator(batch_generator(batch_size), callbacks=callbacks, epochs=8, steps_per_epoch=16156, validation_data=val_batch_generator(batch_size), validation_steps=625) #5132 steps per epoch
+        model.fit_generator(batch_generator(batch_size), callbacks=callbacks, epochs=3, steps_per_epoch=8078, validation_data=val_batch_generator(batch_size), validation_steps=312) #5132 steps per epoch
+        # model.fit_generator(batch_generator(batch_size), epochs=100, steps_per_epoch=5, validation_data=val_batch_generator(batch_size), validation_steps=5) #5132 steps per epoch
 
         # outputDate = now.strftime("%Y-%m-%d %Hh%Mm")
         # os.chdir("output")

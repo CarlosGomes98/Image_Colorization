@@ -11,7 +11,7 @@ import tensorflow as tf
 from keras.callbacks import TensorBoard, ModelCheckpoint, Callback
 from tensorflow.python.client import device_lib
 print(device_lib.list_local_devices())
-from utilities.utilities import read_image, show_image, preprocess, convLayer
+from utilities.utilities import read_image, show_image, preprocess_and_return_X, convLayer
 image_size = 256
 
 class model:
@@ -65,17 +65,17 @@ class model:
 
 		val_datagen = ImageDataGenerator(rescale=(1./255))
         # Download Train and Validation data
-		os.system('gsutil -m cp -r ' + self.image_path + '/Train .')
+		# os.system('gsutil -m cp -r ' + self.image_path + '/Train .')
 		os.system('gsutil -m cp -r ' + self.image_path + '/Validation .')
 
 		batch_size = 32
 		def batch_generator(batch_size):
-		    for batch in datagen.flow_from_directory("Train",
+		    for batch in datagen.flow_from_directory("Validation",
 		                                             target_size=(image_size, image_size),
 		                                             class_mode="input",
 		                                             batch_size = batch_size):
 		        lab = color.rgb2lab(batch[0])
-		        X = preprocess(lab)
+		        X = preprocess_and_return_X(lab)
 		        Y = lab[:, :, :, 1:] / 128
 		        yield ([X, Y])
 
@@ -85,7 +85,7 @@ class model:
 		                                             class_mode="input",
 		                                             batch_size = batch_size):
 		        lab = color.rgb2lab(batch[0])
-		        X = preprocess(lab)
+		        X = preprocess_and_return_X(lab)
 		        Y = lab[:, :, :, 1:] / 128
 		        yield ([X, Y])
 

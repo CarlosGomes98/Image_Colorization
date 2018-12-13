@@ -21,9 +21,9 @@ def show_image(image):
     plt.show()
 
 def printOutput(file, output):
-    for y in range(256):
+    for y in range(image_size):
         row = ""
-        for x in range(256):
+        for x in range(image_size):
             row += str(output[y, x]) + " "
         file.write(row + "\n")
     file.close()

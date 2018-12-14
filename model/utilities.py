@@ -31,12 +31,19 @@ def printOutput(file, output):
 def preprocess_and_return_X(examples):
     examples = examples[:, :, :, 0]
     examples = examples - 50
-    examples = examples/100
+    examples = examples/50
     examples = examples.reshape(examples.shape+(1,))
     return examples
 
 def convLayer(input, filters, kernel_size, dilation=1, stride=1):
     return Conv2D(filters, kernel_size, padding="same", activation="relu", dilation_rate=dilation, strides=stride)(input)
+
+def bucketize_images(images_to_bucketize, batch_size):
+    closest_buckets = images_to_bucketize[:, :, :, 1].astype(int)
+    identity = np.identity(313)
+    bucketized = np.zeros((batch_size, closest_buckets.shape[1], closest_buckets.shape[2], 313))
+    bucketized = identity[closest_buckets]
+    return bucketized
 
 def bucketize_gaussian(imagesAB, buckets, batch_size):
     #calculate the distances from each pixel to each bucket

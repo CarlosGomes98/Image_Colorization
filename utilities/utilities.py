@@ -38,6 +38,14 @@ def preprocess_and_return_X(examples):
 def convLayer(input, filters, kernel_size, dilation=1, stride=1):
     return Conv2D(filters, kernel_size, padding="same", activation="relu", dilation_rate=dilation, strides=stride)(input)
 
+def bucketize(images_to_bucketize, batch_size, rebalance):
+    closest_buckets = np.sum(images_to_bucketize[:, :, :, 1:], axis=3, dtype=int)
+    identity = np.identity(313)
+    bucketized = np.zeros((batch_size, closest_buckets.shape[1], closest_buckets.shape[2], 313))
+    bucketized = identity[closest_buckets]
+    bucketized = bucketized * np.expand_dims(rebalance[np.argmax(bucketized, axis=3)], axis=3)
+    return bucketized
+    
 def bucketize_gaussian(images, buckets, batch_size):
     #get ab channels only
     imagesAB = images[:, :, :, 1:]

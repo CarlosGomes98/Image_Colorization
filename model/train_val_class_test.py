@@ -1,15 +1,16 @@
 import datetime
-from sklearn.model_selection import train_test_split
-from keras.models import Model, load_model
-from keras.layers import Input, UpSampling2D, Conv2D, Conv1D, Dense, Dropout, BatchNormalization, Flatten, Conv2DTranspose, Reshape
 import os, sys
-from keras.preprocessing.image import img_to_array, load_img, ImageDataGenerator
 import numpy as np
+import tensorflow as tf
 from skimage import io, color
 from keras.preprocessing import image
-import tensorflow as tf
+from keras.models import Model, load_model
+from keras.layers import Input, UpSampling2D, Conv2D, Conv1D, Dense, Dropout, BatchNormalization, Flatten, Conv2DTranspose, Reshape
+from keras.preprocessing.image import img_to_array, load_img, ImageDataGenerator
 from keras.callbacks import TensorBoard, ModelCheckpoint, Callback
-from model.utilities import read_image, show_image, preprocess_and_return_X, convLayer, bucketize_gaussian
+from sklearn.model_selection import train_test_split
+from model.utilities import read_image, show_image, preprocess_and_return_X, convLayer, bucketize_gaussian, decode_bucketize_images
+from DataGenerator import DataGenerator
 # from tensorflow.python.client import device_lib
 # print(device_lib.list_local_devices())
 
@@ -87,30 +88,38 @@ class model:
         return Model(inputs=model_input, outputs=model_output)
 
     def train(self, model):
-        datagen = ImageDataGenerator(rescale=(1./255))
-        val_datagen = ImageDataGenerator(rescale=(1./255))
-
         # os.system('gsutil -m cp -r ' + self.image_path + '/Train .')
         # os.system('gsutil -m cp -r ' + self.image_path + '/Validation .')
         # os.system('gsutil -m cp -r ' + self.image_path + '/pts_in_hull.npy .')
         # os.system('gsutil -m cp -r ' + self.image_path + '/prior_probs.npy .')
-        
+
+
         #download rebalance factors and quantization files
+        batch_size = 32
         rebalance = np.load("model/rebalance.npy")
         buckets = np.load("model/pts_in_hull.npy")
-        batch_size = 1
-        def batch_generator(batch_size):
-            for batch in datagen.flow_from_directory("data/Train_1",
-                                                     target_size=(image_size, image_size),
-                                                     class_mode="input",
-                                                     batch_size = batch_size):
-                lab = color.rgb2lab(batch[0])
-                X = preprocess_and_return_X(lab)
-                Y = lab[:, :, :, 1:]
-                Y = bucketize_gaussian(Y, buckets, batch_size)
-                Y = Y * rebalance
-                Y = Y.reshape((batch_size, image_size*image_size, 313))
-                yield ([X, Y])
+        
+        
+        partition = {"train": [], "validation": []}
+        for image in os.listdir(self.image_path + "/Train_small/Train_small"):
+            partition["train"].append(image)
+        
+        for image in os.listdir(self.image_path + "/Train_small/Train_small"):
+            partition["validation"].append(image)
+        
+        labels = {}
+        for index, image in enumerate(partition["train"]):
+            labels[image] = index    
+        for index, image in enumerate(partition["validation"]):
+            labels[image] = index
+
+        params = {"dim": (image_size, image_size),
+                  "batch_size": batch_size,
+                  "n_channels": 313,
+                  "shuffle": True}
+
+        training_generator = DataGenerator(partition["train"], labels, **params)
+        validation_generator = DataGenerator(partition["validation"], labels, **params)
 
         class WeightsSaver(Callback):
             def __init__(self, N, output_path):
@@ -151,7 +160,7 @@ class model:
                     optimizer="adam",
                     metrics=['accuracy'])
 
-        model.fit_generator(batch_generator(batch_size), epochs=150, steps_per_epoch=2) #5132 steps per epoch
+        model.fit_generator(training_generator, epochs=100, steps_per_epoch=5, workers=6, use_multiprocessint=True) #5132 steps per epoch
 
         # outputDate = now.strftime("%Y-%m-%d %Hh%Mm")
         # os.chdir("output")

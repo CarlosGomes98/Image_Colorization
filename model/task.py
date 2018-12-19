@@ -8,13 +8,13 @@ Options:
 """
 from docopt import docopt
 
-from model.train_val_class import model
+from model.train_val_class_test import model
 
 if __name__ == '__main__':
     arguments = docopt(__doc__)
     # Assign model variables to commandline arguments
-    image_path = arguments['<output_path>']
-    output_path = arguments['<image_path>']
+    image_path = arguments['<image_path>']
+    output_path = arguments['<output_path>']
     print("Image path: " + image_path)
     print("Output path: " + output_path)
     # Run the training job

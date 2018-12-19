@@ -28,8 +28,15 @@ def printOutput(file, output):
         file.write(row + "\n")
     file.close()
 
-def preprocess_and_return_X(images):
+def preprocess_and_return_X_batch(images):
     X = images[:, :, :, 0]
+    X = X - 50
+    X = X/50
+    X = X.reshape(X.shape+(1,))
+    return X
+
+def preprocess_and_return_X(image):
+    X = image[:, :, 0]
     X = X - 50
     X = X/50
     X = X.reshape(X.shape+(1,))
@@ -63,10 +70,10 @@ def bucketize_gaussian_batch(imagesAB, buckets, batch_size):
     distances[vertical_indices, five_shortest_distances_indices] = weights_norm
     return distances.reshape(batch_size, image_size, image_size, 313)
 
-def bucketize_gaussian(imagesAB, buckets):
+def bucketize_gaussian(imageAB, buckets, rebalance):
     #calculate the distances from each pixel to each bucket
     distances = np.zeros((image_size*image_size, buckets.shape[0]))
-    distances = cdist(imagesAB.reshape(image_size*image_size, 2), buckets)
+    distances = cdist(imageAB.reshape(image_size*image_size, 2), buckets)
     #find five shortest ones
     shortest_distances_indices = np.argpartition(distances, 5)
     five_shortest_distances_indices = shortest_distances_indices[:, :5]
@@ -78,4 +85,5 @@ def bucketize_gaussian(imagesAB, buckets):
     weights = np.exp(-distances[vertical_indices, five_shortest_distances_indices]**2/(2*5**2))
     weights_norm = weights/np.sum(weights, axis=1, keepdims=True)
     distances[vertical_indices, five_shortest_distances_indices] = weights_norm
-    return distances.reshape(image_size, image_size, 313)
+    distances = distances * np.expand_dims(rebalance[np.argmax(distances, axis=1)], axis=1)
+    return distances

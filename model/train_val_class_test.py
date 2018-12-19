@@ -9,12 +9,12 @@ from keras.layers import Input, UpSampling2D, Conv2D, Conv1D, Dense, Dropout, Ba
 from keras.preprocessing.image import img_to_array, load_img, ImageDataGenerator
 from keras.callbacks import TensorBoard, ModelCheckpoint, Callback
 from sklearn.model_selection import train_test_split
-from model.utilities import read_image, show_image, preprocess_and_return_X, convLayer, bucketize_gaussian, decode_bucketize_images
+from utilities import read_image, show_image, preprocess_and_return_X, convLayer, bucketize_gaussian, decode_bucketize_images
 from DataGenerator import DataGenerator
 # from tensorflow.python.client import device_lib
 # print(device_lib.list_local_devices())
 
-image_size = 256
+image_size = 128
 
 class model:
     def __init__(self, image_path, output_path):
@@ -95,12 +95,14 @@ class model:
 
 
         #download rebalance factors and quantization files
-        batch_size = 32
+        batch_size = 16
         rebalance = np.load("model/rebalance.npy")
         buckets = np.load("model/pts_in_hull.npy")
         
         
         partition = {"train": [], "validation": []}
+        train_data_path = self.image_path + "/Train_small/Train_small"
+        validation_data_path = self.image_path + "/Train_small/Train_small"
         for image in os.listdir(self.image_path + "/Train_small/Train_small"):
             partition["train"].append(image)
         
@@ -117,9 +119,10 @@ class model:
                   "batch_size": batch_size,
                   "n_channels": 313,
                   "shuffle": True}
-
-        training_generator = DataGenerator(partition["train"], labels, **params)
-        validation_generator = DataGenerator(partition["validation"], labels, **params)
+        
+        quant = (buckets, rebalance)
+        training_generator = DataGenerator(partition["train"], labels, train_data_path, *quant, **params)
+        validation_generator = DataGenerator(partition["validation"], labels, validation_data_path, *quant, **params)
 
         class WeightsSaver(Callback):
             def __init__(self, N, output_path):
@@ -160,7 +163,7 @@ class model:
                     optimizer="adam",
                     metrics=['accuracy'])
 
-        model.fit_generator(training_generator, epochs=100, steps_per_epoch=5, workers=6, use_multiprocessint=True) #5132 steps per epoch
+        model.fit_generator(training_generator, epochs=100, steps_per_epoch=10, workers=4, max_queue_size=8, use_multiprocessing=False) #5132 steps per epoch
 
         # outputDate = now.strftime("%Y-%m-%d %Hh%Mm")
         # os.chdir("output")

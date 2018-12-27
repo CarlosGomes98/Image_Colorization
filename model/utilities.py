@@ -1,20 +1,21 @@
 import numpy as np
-from keras.preprocessing.image import img_to_array, load_img, ImageDataGenerator
-from keras.layers import Conv2D
+# from keras.preprocessing.image import img_to_array, load_img, ImageDataGenerator
+# from keras.layers import Conv2D
 from skimage import io, color, transform
 from sklearn.neighbors import NearestNeighbors
 from scipy.spatial.distance import cdist
 from matplotlib import pyplot as plt
+from google.cloud import storage
 import os
 image_size = 128
 
-def read_image(img_id, dir):
-    try:
-        img = load_img(dir + "/" + img_id, target_size=(image_size, image_size))
-        img = img_to_array(img)
-        return img
-    except:
-        return None
+# def read_image(img_id, dir):
+#     try:
+#         img = load_img(dir + "/" + img_id, target_size=(image_size, image_size))
+#         img = img_to_array(img)
+#         return img
+#     except:
+#         return None
 
 def show_image(image):
     plt.imshow(image/255.)
@@ -42,8 +43,30 @@ def preprocess_and_return_X(image):
     X = X.reshape(X.shape+(1,))
     return X
 
-def convLayer(input, filters, kernel_size, dilation=1, stride=1):
-    return Conv2D(filters, kernel_size, padding="same", activation="relu", dilation_rate=dilation, strides=stride)(input)
+# def convLayer(input, filters, kernel_size, dilation=1, stride=1):
+#     return Conv2D(filters, kernel_size, padding="same", activation="relu", dilation_rate=dilation, strides=stride)(input)
+
+def list_blobs_with_prefix(bucket_name, prefix, delimiter=None):
+    """Lists all the blobs in the bucket that begin with the prefix.
+    This can be used to list all blobs in a "folder", e.g. "public/".
+    The delimiter argument can be used to restrict the results to only the
+    "files" in the given "folder". Without the delimiter, the entire tree under
+    the prefix is returned. For example, given these blobs:
+        /a/1.txt
+        /a/b/2.txt
+    If you just specify prefix = '/a', you'll get back:
+        /a/1.txt
+        /a/b/2.txt
+    However, if you specify prefix='/a' and delimiter='/', you'll get back:
+        /a/1.txt
+    """
+    storage_client = storage.Client()
+    bucket = storage_client.get_bucket(bucket_name)
+
+    blobs = bucket.list_blobs(prefix=prefix, delimiter=delimiter)
+
+    result = [blob.name for blob in blobs]
+    return result
 
 def decode_bucketize_images(images_to_bucketize, rebalance, batch_size):
     closest_buckets = images_to_bucketize[:, :, :, 1].astype(int)
@@ -69,6 +92,26 @@ def bucketize_gaussian_batch(imagesAB, buckets, batch_size):
     weights_norm = weights/np.sum(weights, axis=1, keepdims=True)
     distances[vertical_indices, five_shortest_distances_indices] = weights_norm
     return distances.reshape(batch_size, image_size, image_size, 313)
+
+def decode_bucketize(image, rebalance):
+    identity = np.identity(313).astype(float)
+    bucketized = np.zeros((image_size, image_size, 313))
+    bucketized = identity[image[:, :, 1]]
+    bucketized = bucketized * np.expand_dims(rebalance[np.argmax(bucketized, axis=2)], axis=2)
+    return bucketized.reshape(image_size*image_size, 313)
+
+def decode_bucketize_no_rebalance(image):
+    identity = np.identity(313).astype(float)
+    bucketized = np.zeros((image_size, image_size, 313))
+    bucketized = identity[image[:, :, 1]]
+    return bucketized.reshape(image_size*image_size, 313)
+
+def decode_bucketize_batch(images, rebalance):
+    identity = np.identity(313).astype(float)
+    bucketized = np.zeros((images.shape[0], image_size, image_size, 313))
+    bucketized = identity[images[... , 1]]
+    bucketized = bucketized * np.expand_dims(rebalance[np.argmax(bucketized, axis=3)], axis=3)
+    return bucketized.reshape(images.shape[0], image_size*image_size, 313)
 
 def bucketize_gaussian(imageAB, buckets, rebalance):
     #calculate the distances from each pixel to each bucket

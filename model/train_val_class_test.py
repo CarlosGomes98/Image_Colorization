@@ -6,15 +6,17 @@ from skimage import io, color
 from keras.preprocessing import image
 from keras.models import Model, load_model
 from keras.layers import Input, UpSampling2D, Conv2D, Conv1D, Dense, Dropout, BatchNormalization, Flatten, Conv2DTranspose, Reshape
-from keras.preprocessing.image import img_to_array, load_img, ImageDataGenerator
 from keras.callbacks import TensorBoard, ModelCheckpoint, Callback
 from sklearn.model_selection import train_test_split
-from utilities import read_image, show_image, preprocess_and_return_X, convLayer, bucketize_gaussian, decode_bucketize_images
-from DataGenerator import DataGenerator
-# from tensorflow.python.client import device_lib
-# print(device_lib.list_local_devices())
+from model.DataGenerator import DataGenerator
+from tensorflow.python.client import device_lib
+from model.utilities import list_blobs_with_prefix
+print(device_lib.list_local_devices())
 
 image_size = 128
+
+def convLayer(input, filters, kernel_size, dilation=1, stride=1):
+        return Conv2D(filters, kernel_size, padding="same", activation="relu", dilation_rate=dilation, strides=stride)(input)
 
 class model:
     def __init__(self, image_path, output_path):
@@ -35,8 +37,8 @@ class model:
     #     test = color.rgb2lab(test)
     #     test = preprocess(test)
     #     return test
-
     def set_up_model(self):
+        #try keras sequential u dumdum
         input_shape = (image_size, image_size, 1)
 
         model_input = Input(shape = input_shape)
@@ -46,34 +48,34 @@ class model:
         model_output = convLayer(model_output, 64, (3, 3), stride=2)
         model_output = BatchNormalization()(model_output)
         # conv2
-        # model_output = convLayer(model_output, 128, (3, 3))
+        model_output = convLayer(model_output, 128, (3, 3))
         model_output = convLayer(model_output, 128, (3, 3), stride=2)
         model_output = BatchNormalization()(model_output)
         # conv3
-        # model_output = convLayer(model_output, 256, (3, 3))
-        # model_output = convLayer(model_output, 256, (3, 3))
+        model_output = convLayer(model_output, 256, (3, 3))
+        model_output = convLayer(model_output, 256, (3, 3))
         model_output = convLayer(model_output, 256, (3, 3), stride=2)
         model_output = BatchNormalization()(model_output)
         # conv4
-        # model_output = convLayer(model_output, 512, (3, 3))
+        model_output = convLayer(model_output, 512, (3, 3))
         model_output = convLayer(model_output, 512, (3, 3))
         model_output = convLayer(model_output, 512, (3, 3))
         model_output = BatchNormalization()(model_output)
         # conv5
-        # model_output = convLayer(model_output, 512, (3, 3), dilation=2)
-        # model_output = convLayer(model_output, 512, (3, 3), dilation=2)
-        # model_output = convLayer(model_output, 512, (3, 3), dilation=2)
-        # model_output = BatchNormalization()(model_output)
+        model_output = convLayer(model_output, 512, (3, 3), dilation=2)
+        model_output = convLayer(model_output, 512, (3, 3), dilation=2)
+        model_output = convLayer(model_output, 512, (3, 3), dilation=2)
+        model_output = BatchNormalization()(model_output)
         # conv6
-        # model_output = convLayer(model_output, 512, (3, 3), dilation=2)
-        # model_output = convLayer(model_output, 512, (3, 3), dilation=2)
-        # model_output = convLayer(model_output, 512, (3, 3), dilation=2)
-        # model_output = BatchNormalization()(model_output)
+        model_output = convLayer(model_output, 512, (3, 3), dilation=2)
+        model_output = convLayer(model_output, 512, (3, 3), dilation=2)
+        model_output = convLayer(model_output, 512, (3, 3), dilation=2)
+        model_output = BatchNormalization()(model_output)
         # conv7
-        # model_output = convLayer(model_output, 256, (3, 3))
-        # model_output = convLayer(model_output, 256, (3, 3))
-        # model_output = convLayer(model_output, 256, (3, 3))
-        # model_output = BatchNormalization()(model_output)
+        model_output = convLayer(model_output, 256, (3, 3))
+        model_output = convLayer(model_output, 256, (3, 3))
+        model_output = convLayer(model_output, 256, (3, 3))
+        model_output = BatchNormalization()(model_output)
         # conv8
         model_output = UpSampling2D((2, 2))(model_output)
         model_output = convLayer(model_output, 256, (3, 3))
@@ -88,41 +90,29 @@ class model:
         return Model(inputs=model_input, outputs=model_output)
 
     def train(self, model):
-        # os.system('gsutil -m cp -r ' + self.image_path + '/Train .')
+        os.system('gsutil -m cp -r ' + self.image_path + '/Train_small_batches .')
         # os.system('gsutil -m cp -r ' + self.image_path + '/Validation .')
-        # os.system('gsutil -m cp -r ' + self.image_path + '/pts_in_hull.npy .')
-        # os.system('gsutil -m cp -r ' + self.image_path + '/prior_probs.npy .')
+        os.system('gsutil cp ' + self.image_path + '/pts_in_hull.npy .')
+        os.system('gsutil cp ' + self.image_path + '/rebalance.npy .')
+        # os.system('gsutil cp ' + self.image_path + '/Class_Train_Encoded_Small_1/model_weights.h5 .')
 
 
         #download rebalance factors and quantization files
-        batch_size = 16
-        rebalance = np.load("model/rebalance.npy")
-        buckets = np.load("model/pts_in_hull.npy")
-        
-        
-        partition = {"train": [], "validation": []}
-        train_data_path = self.image_path + "/Train_small/Train_small"
-        validation_data_path = self.image_path + "/Train_small/Train_small"
-        for image in os.listdir(self.image_path + "/Train_small/Train_small"):
-            partition["train"].append(image)
-        
-        for image in os.listdir(self.image_path + "/Train_small/Train_small"):
-            partition["validation"].append(image)
-        
-        labels = {}
-        for index, image in enumerate(partition["train"]):
-            labels[image] = index    
-        for index, image in enumerate(partition["validation"]):
-            labels[image] = index
-
+        batch_size = 32
+        rebalance = np.load("rebalance.npy")
+        buckets = np.load("pts_in_hull.npy")
+        train_data_path = "Train_small_batches"
+        validation_data_path = "Train_small_batches"
+        num_train_batches = 5
+        num_validation_batches = 5
         params = {"dim": (image_size, image_size),
                   "batch_size": batch_size,
                   "n_channels": 313,
                   "shuffle": True}
         
         quant = (buckets, rebalance)
-        training_generator = DataGenerator(partition["train"], labels, train_data_path, *quant, **params)
-        validation_generator = DataGenerator(partition["validation"], labels, validation_data_path, *quant, **params)
+        training_generator = DataGenerator(train_data_path, num_train_batches, *quant, **params)
+        validation_generator = DataGenerator(validation_data_path, num_validation_batches, *quant, **params)
 
         class WeightsSaver(Callback):
             def __init__(self, N, output_path):
@@ -134,10 +124,10 @@ class model:
                 if self.batch % self.N == 0:
                     name = 'currentWeights.h5'
                     self.model.save_weights(name)
-                    # try:
-                    #     os.system('gsutil cp ' + name + ' ' + self.output_path)
-                    # except:
-                    #     print("Could not upload current weights")
+                    try:
+                        os.system('gsutil cp ' + name + ' ' + self.output_path)
+                    except:
+                        print("Could not upload current weights")
                 self.batch += 1
 
         checkpoint = ModelCheckpoint("best.hdf5",
@@ -146,41 +136,41 @@ class model:
                                     save_best_only=True,
                                     mode="max")
 
-        every_20_batches = WeightsSaver(20, self.output_path)
+        # every_20_batches = WeightsSaver(20, self.output_path)
 
         every_10 = ModelCheckpoint("latest.hdf5",
                                   monitor="accuracy",
                                   verbose=1,
                                   save_best_only=False,
                                   mode='auto',
-                                  period=1)
+                                  period=25)
 
         tensorboard = TensorBoard(log_dir=".")
-        callbacks = [tensorboard, checkpoint, every_10, every_20_batches]
-        # model.load_weights("D:/Libraries/Documents/Image_Colorization/output/model_weights.h5")
+        callbacks = [tensorboard, checkpoint, every_10]
+        # model.load_weights("model_weights.h5")
 
         model.compile(loss='categorical_crossentropy',
                     optimizer="adam",
                     metrics=['accuracy'])
 
-        model.fit_generator(training_generator, epochs=100, steps_per_epoch=10, workers=4, max_queue_size=8, use_multiprocessing=False) #5132 steps per epoch
+        model.fit_generator(training_generator, validation_data=validation_generator, validation_steps=num_validation_batches, callbacks=callbacks, steps_per_epoch=num_train_batches, epochs=250, workers=2, max_queue_size=10, use_multiprocessing=True) #5132 steps per epoch
 
         # outputDate = now.strftime("%Y-%m-%d %Hh%Mm")
         # os.chdir("output")
         # os.mkdir(outputDate)
         # os.chdir(outputDate)
         try:
-            model.save_weights(self.output_path + "/model_weights.h5")
-            model.save(self.output_path + "/model.h5")
+            model.save_weights("model_weights.h5")
+            model.save("model.h5")
         # else:
         #     model.load_weights("/floyd/input/model/my_model_weights.h5")
         except:
             print("Could not save")
 
-        # os.system('gsutil cp model_weights.h5 ' + self.output_path)
-        # os.system('gsutil cp model.h5 ' + self.output_path)
-        # os.system('gsutil cp best.hdf5 ' + self.output_path)
-        # os.system('gsutil cp latest.h5 ' + self.output_path)
+        os.system('gsutil cp model_weights.h5 ' + self.output_path)
+        os.system('gsutil cp model.h5 ' + self.output_path)
+        os.system('gsutil cp best.hdf5 ' + self.output_path)
+        os.system('gsutil cp latest.hdf5 ' + self.output_path)
 
 
     # In[ ]:

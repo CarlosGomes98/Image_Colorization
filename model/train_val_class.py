@@ -3,21 +3,36 @@ import os, sys
 import numpy as np
 import tensorflow as tf
 from skimage import io, color
+import keras.backend as K
 from keras.preprocessing import image
 from keras.models import Model, load_model
-from keras.layers import Input, UpSampling2D, Conv2D, Conv1D, Dense, Dropout, BatchNormalization, Flatten, Conv2DTranspose, Reshape
+from keras.layers import Activation, Input, UpSampling2D, Conv2D, Conv1D, Dense, Dropout, BatchNormalization, Flatten, Conv2DTranspose, Reshape
 from keras.callbacks import TensorBoard, ModelCheckpoint, Callback
 from sklearn.model_selection import train_test_split
-from model.DataGenerator import DataGenerator
+from model.DataGeneratorImages import DataGenerator
 from tensorflow.python.client import device_lib
+from model.utilities import list_blobs_with_prefix
 print(device_lib.list_local_devices())
 
-image_size = 128
+image_size = 64
+
 if tf.test.gpu_device_name():
     print('Default GPU: {}'.format(tf.test.gpu_device_name()))
 else:
     print('Failed to find default GPU.')
     sys.exit(1)
+
+# def categorical_crossentropy_color(y_pred, y_true):
+#     closest_colors = K.argmax(y_true, axis=-1)
+#     weights = K.gather(np.load("rebalance.npy").astype(np.float32), closest_colors)
+#     weights = K.reshape(weights, (-1, 1))
+#     #enhance rarer colors
+#     y_true = y_true * weights
+
+#     cross_entropy = K.categorical_crossentropy(y_pred, y_true)
+#     cross_entropy = K.mean(cross_entropy, axis=-1)
+
+#     return cross_entropy
 
 def convLayer(input, filters, kernel_size, dilation=1, stride=1):
         return Conv2D(filters, kernel_size, padding="same", activation="relu", dilation_rate=dilation, strides=stride)(input)
@@ -59,27 +74,27 @@ class model:
         model_output = convLayer(model_output, 128, (3, 3), stride=2)
         model_output = BatchNormalization()(model_output)
         # conv3
-        model_output = convLayer(model_output, 256, (3, 3))
+        # model_output = convLayer(model_output, 256, (3, 3))
         model_output = convLayer(model_output, 256, (3, 3))
         model_output = convLayer(model_output, 256, (3, 3), stride=2)
         model_output = BatchNormalization()(model_output)
         # conv4
-        model_output = convLayer(model_output, 512, (3, 3))
-        model_output = convLayer(model_output, 512, (3, 3))
-        model_output = convLayer(model_output, 512, (3, 3))
-        model_output = BatchNormalization()(model_output)
+        # model_output = convLayer(model_output, 512, (3, 3))
+        # model_output = convLayer(model_output, 512, (3, 3))
+        # model_output = convLayer(model_output, 512, (3, 3))
+        # model_output = BatchNormalization()(model_output)
         # conv5
-        model_output = convLayer(model_output, 512, (3, 3), dilation=2)
+        # model_output = convLayer(model_output, 512, (3, 3), dilation=2)
         model_output = convLayer(model_output, 512, (3, 3), dilation=2)
         model_output = convLayer(model_output, 512, (3, 3), dilation=2)
         model_output = BatchNormalization()(model_output)
         # conv6
-        model_output = convLayer(model_output, 512, (3, 3), dilation=2)
+        # model_output = convLayer(model_output, 512, (3, 3), dilation=2)
         model_output = convLayer(model_output, 512, (3, 3), dilation=2)
         model_output = convLayer(model_output, 512, (3, 3), dilation=2)
         model_output = BatchNormalization()(model_output)
         # conv7
-        model_output = convLayer(model_output, 256, (3, 3))
+        # model_output = convLayer(model_output, 256, (3, 3))
         model_output = convLayer(model_output, 256, (3, 3))
         model_output = convLayer(model_output, 256, (3, 3))
         model_output = BatchNormalization()(model_output)
@@ -92,47 +107,40 @@ class model:
         model_output = convLayer(model_output, 256, (3, 3))
 
         # unary prediction
-        reshaped_output = Reshape((image_size*image_size, 256))(model_output)
-        model_output = Conv1D(313, (1), padding="same", activation="softmax")(reshaped_output)
+        model_output = Conv2D(313, (1, 1), padding="same")(model_output)
+        model_output = Reshape((image_size*image_size, 313))(model_output)
+        model_output = Activation("softmax")(model_output)
         return Model(inputs=model_input, outputs=model_output)
 
     def train(self, model):
 
-        os.system('gsutil -m cp -r ' + self.image_path + '/Train_Class .')
-        os.system('gsutil -m cp -r ' + self.image_path + '/Validation_Class .')
+        train_data_path = "Train_small"
+        validation_data_path = "Train_small"
+        # os.system('gsutil -m cp -r ' + self.image_path + '/Train_Class_batches .')
+        # os.system('gsutil -m cp -r ' + self.image_path + '/Train_small_batches .')
+        os.system('gsutil -m cp -r ' + self.image_path + '/' + train_data_path + '/Train_small .')
+        # os.system('gsutil -m cp -r ' + self.image_path + '/' + validation_data_path + '/Train_small .')
         os.system('gsutil cp ' + self.image_path + '/pts_in_hull.npy .')
         os.system('gsutil cp ' + self.image_path + '/rebalance.npy .')
 
-        #download rebalance factors and quantization files
-        rebalance = np.load("rebalance.npy")
-        buckets = np.load("pts_in_hull.npy")
-        
-        batch_size = 32
         partition = {"train": [], "validation": []}
-        train_data_path = "Train_Class"
-        validation_data_path = "Validation_Class"
-
         for image in os.listdir(train_data_path):
-            partition["train"].append(image)
+            partition["train"].append(os.path.join(train_data_path, image))
         
         for image in os.listdir(validation_data_path):
-            partition["validation"].append(image)
+            partition["validation"].append(os.path.join(validation_data_path, image))
         
-        labels = {}
-        for index, image in enumerate(partition["train"]):
-            labels[image] = index    
-        for index, image in enumerate(partition["validation"]):
-            labels[image] = index
-
+        batch_size = 32
+        buckets = np.load("pts_in_hull.npy")
+        rebalance = np.load("rebalance.npy")
+        num_train_batches = 5
+        num_validation_batches = 5
         params = {"dim": (image_size, image_size),
                   "batch_size": batch_size,
-                  "n_channels": 313,
                   "shuffle": True}
         
-        quant = (buckets, rebalance)
-        training_generator = DataGenerator(partition["train"], labels, train_data_path, *quant, **params)
-        validation_generator = DataGenerator(partition["validation"], labels, validation_data_path, *quant, **params)
-
+        training_generator = DataGenerator(partition["train"], buckets, rebalance, **params)
+        validation_generator = DataGenerator(partition["validation"], buckets, None, **params)
         model.summary()
 
         class WeightsSaver(Callback):
@@ -159,20 +167,22 @@ class model:
 
         every_2000_batches = WeightsSaver(2000, self.output_path)
 
-        every_10 = ModelCheckpoint("latest.hdf5",
-                                  monitor="accuracy",
-                                  verbose=1,
-                                  save_best_only=False,
-                                  mode='auto',
-                                  period=5)
+        # every_10 = ModelCheckpoint("latest.hdf5",
+        #                           monitor="accuracy",
+        #                           verbose=1,
+        #                           save_best_only=False,
+        #                           mode='auto',
+        #                           period=5)
 
-        tensorboard = TensorBoard(log_dir=".")
-        callbacks = [tensorboard, checkpoint, every_10, every_2000_batches]
-        model.compile(loss='categorical_crossentropy',
+        tensorboard = TensorBoard(log_dir=".", write_images=True, update_freq=50000)
+        callbacks = [tensorboard, checkpoint, every_2000_batches]
+        # os.system('gsutil cp ' + self.image_path + '/Class_Train_R/currentWeights.h5 .')
+        # model.load_weights("currentWeights.h5")
+        model.compile(loss="categorical_crossentropy",
                     optimizer="adam",
                     metrics=['accuracy'])
 
-        model.fit_generator(training_generator, validation_data=validation_generator, validation_steps=313, callbacks=callbacks, steps_per_epoch=8079, epochs=3, workers=4, max_queue_size=10, use_multiprocessing=False) #5132 steps per epoch
+        model.fit_generator(training_generator, validation_data=validation_generator, validation_steps=num_validation_batches, callbacks=callbacks, steps_per_epoch=num_train_batches, epochs=200, workers=4, max_queue_size=10, use_multiprocessing=True) #5132 steps per epoch
         # model.fit_generator(batch_generator(batch_size), epochs=100, steps_per_epoch=5, validation_data=val_batch_generator(batch_size), validation_steps=5)
 
         # outputDate = now.strftime("%Y-%m-%d %Hh%Mm")
@@ -191,123 +201,6 @@ class model:
         os.system('gsutil cp model.h5 ' + self.output_path)
         os.system('gsutil cp best.hdf5 ' + self.output_path)
         os.system('gsutil cp latest.hdf5 ' + self.output_path)
-
-
-    # In[ ]:
-
-    '''
-    # model.load_weights("drive/app/output/my_model_weights2018-08-10 20:36.h5")
-    # if(not os.path.exists("/floyd/input/model/my_model_weights.h5")):
-    datagen = ImageDataGenerator(
-        #featurewise_center=True,
-        #samplewise_center=False,
-        shear_range=0.4,
-        zoom_range=0.4,
-        rotation_range=40,
-        horizontal_flip=True,
-        rescale=(1./255)
-    )
-
-
-    batch_size = 64
-    def batch_generator(batch_size):
-        for batch in datagen.flow_from_directory(self.image_path+"/Train/",
-                                                 target_size=(image_size, image_size),
-                                                 class_mode="input",
-                                                 batch_size = batch_size):
-            lab = color.rgb2lab(batch[0])
-            X = preprocess(lab)
-            Y = lab[:, :, :, 1:] / 128
-            yield ([X, Y])
-
-    def val_batch_generator(batch_size):
-        for batch in datagen.flow_from_directory(self.image_path+"/Validation/",
-                                             target_size=(image_size, image_size),
-                                             class_mode="input",
-                                             batch_size = batch_size):
-            lab = color.rgb2lab(batch[0])
-            X = preprocess(lab)
-            Y = lab[:, :, :, 1:] / 128
-            yield ([X, Y])
-
-    model.summary()
-
-    outputDate = now.strftime("%Y-%m-%d %H:%M")
-    os.chdir("output")
-    os.mkdir(outputDate)
-    os.chdir(outputDate)
-
-    class WeightsSaver(Callback):
-        def __init__(self, N):
-            self.N = N
-            self.batch = 0
-
-        def on_batch_end(self, batch, logs={}):
-            if self.batch % self.N == 0:
-                name = 'currentWeights.h5'
-                self.model.save_weights(name)
-            self.batch += 1
-
-    checkpoint = ModelCheckpoint("best.hdf5",
-                                monitor="accuracy",
-                                verbose=1,
-                                save_best_only=True,
-                                mode="max")
-
-    every_20_batches = WeightsSaver(20)
-
-    every_10 = ModelCheckpoint("latest.hdf5",
-                              monitor="accuracy",
-                              verbose=1,
-                              save_best_only=False,
-                              mode='auto',
-                              period=1)
-
-    tensorboard = TensorBoard(log_dir=".")
-
-
-    model.load_weights("/content/drive/My Drive/app/output/2018-09-29 14:58/latest.hdf5")#manually change this, i know, i know
-
-    model.compile(loss='mean_squared_error',
-                optimizer="adam",
-                metrics=['accuracy'])
-
-    model.fit_generator(batch_generator(batch_size), callbacks=[tensorboard, checkpoint, every_10, every_20_batches], epochs=1, steps_per_epoch=5132, validation_data=val_batch_generator(batch_size)) #5132 steps per epoch
-
-
-    try:
-        model.save_weights("model_weights.h5")
-    # else:
-    #     model.load_weights("/floyd/input/model/my_model_weights.h5")
-    except:
-        print("Could not save")
-
-    model.save("model.h5")
-
-
-    # In[ ]:
-
-
-    model.load_weights("latest.hdf5")
-
-    model.compile(loss='mean_squared_error',
-                optimizer="adam",
-                metrics=['accuracy'])
-
-    '''
-    # In[ ]:
-
-
-    # # Test model
-    # def test(self, test, model):
-    #     output = model.predict(test)
-    #     output = output * 128
-    #     # Output colorizations
-    #     for i in range(len(output)):
-    #         cur = np.zeros((image_size, image_size, 3))
-    #         cur[:,:,0] = test[i][:,:,0]
-    #         cur[:,:,1:] = output[i]
-    #         io.imsave(self.output_path + "/" + str(i) + ".png", color.lab2rgb(cur))
 
     def set_up_and_train(self):
         model = self.set_up_model()

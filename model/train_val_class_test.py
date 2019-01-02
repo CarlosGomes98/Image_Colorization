@@ -95,12 +95,25 @@ class model:
         os.system('gsutil cp ' + self.image_path + '/pts_in_hull.npy .')
         os.system('gsutil cp ' + self.image_path + '/rebalance.npy .')
         # os.system('gsutil cp ' + self.image_path + '/Class_Train_Encoded_Small_1/model_weights.h5 .')
+        rebalance = np.load("rebalance.npy")
+        buckets = np.load("pts_in_hull.npy")
+        data = np.zeros((160, 128, 128, 2), dtype=int)
 
+        for index, batch in enumerate(os.listdir("Train_small_batches")):
+            data[index*32:(index+1)*32] = np.load("Train_small_batches/" + batch)
+        
+        X = data[..., 0].astype(float)
+        X = X - 50
+        X = X/50
+        X = X.reshape(X.shape+(1,))
+
+        identity =  np.identity(313).astype(float) * rebalance
+        bucketized = np.zeros((data.shape[0], 128, 128, 313))
+        bucketized = identity[data[... , 1]]
+        Y = bucketized.reshape(data.shape[0], 128*128, 313)
 
         #download rebalance factors and quantization files
         batch_size = 32
-        rebalance = np.load("rebalance.npy")
-        buckets = np.load("pts_in_hull.npy")
         train_data_path = "Train_small_batches"
         validation_data_path = "Train_small_batches"
         num_train_batches = 5
@@ -111,8 +124,8 @@ class model:
                   "shuffle": True}
         
         quant = (buckets, rebalance)
-        training_generator = DataGenerator(train_data_path, num_train_batches, *quant, **params)
-        validation_generator = DataGenerator(validation_data_path, num_validation_batches, *quant, **params)
+        # training_generator = DataGenerator(train_data_path, num_train_batches, *quant, **params)
+        # validation_generator = DataGenerator(validation_data_path, num_validation_batches, *quant, **params)
 
         class WeightsSaver(Callback):
             def __init__(self, N, output_path):
@@ -153,7 +166,7 @@ class model:
                     optimizer="adam",
                     metrics=['accuracy'])
 
-        model.fit_generator(training_generator, validation_data=validation_generator, validation_steps=num_validation_batches, callbacks=callbacks, steps_per_epoch=num_train_batches, epochs=250, workers=2, max_queue_size=10, use_multiprocessing=True) #5132 steps per epoch
+        model.fit(x=X, y=Y, batch_size=batch_size, callbacks=callbacks, epochs=250) #5132 steps per epoch
 
         # outputDate = now.strftime("%Y-%m-%d %Hh%Mm")
         # os.chdir("output")

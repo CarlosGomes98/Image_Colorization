@@ -7,8 +7,7 @@ from scipy.spatial.distance import cdist
 from matplotlib import pyplot as plt
 from google.cloud import storage
 import os
-image_size = 128
-
+image_size = 64
 # def read_image(img_id, dir):
 #     try:
 #         img = load_img(dir + "/" + img_id, target_size=(image_size, image_size))

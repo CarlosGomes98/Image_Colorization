@@ -10,17 +10,16 @@ from keras.layers import Activation, Input, UpSampling2D, Conv2D, Conv1D, Dense,
 from keras.callbacks import TensorBoard, ModelCheckpoint, Callback
 from sklearn.model_selection import train_test_split
 from model.DataGeneratorImages import DataGenerator
-from tensorflow.python.client import device_lib
-from model.utilities import list_blobs_with_prefix
-print(device_lib.list_local_devices())
+# from tensorflow.python.client import device_lib
+# print(device_lib.list_local_devices())
 
 image_size = 64
 
-if tf.test.gpu_device_name():
-    print('Default GPU: {}'.format(tf.test.gpu_device_name()))
-else:
-    print('Failed to find default GPU.')
-    sys.exit(1)
+# if tf.test.gpu_device_name():
+#     print('Default GPU: {}'.format(tf.test.gpu_device_name()))
+# else:
+#     print('Failed to find default GPU.')
+#     sys.exit(1)
 
 # def categorical_crossentropy_color(y_pred, y_true):
 #     closest_colors = K.argmax(y_true, axis=-1)
@@ -80,9 +79,9 @@ class model:
         model_output = BatchNormalization()(model_output)
         # conv4
         # model_output = convLayer(model_output, 512, (3, 3))
-        # model_output = convLayer(model_output, 512, (3, 3))
-        # model_output = convLayer(model_output, 512, (3, 3))
-        # model_output = BatchNormalization()(model_output)
+        model_output = convLayer(model_output, 512, (3, 3))
+        model_output = convLayer(model_output, 512, (3, 3))
+        model_output = BatchNormalization()(model_output)
         # conv5
         # model_output = convLayer(model_output, 512, (3, 3), dilation=2)
         model_output = convLayer(model_output, 512, (3, 3), dilation=2)
@@ -113,15 +112,11 @@ class model:
         return Model(inputs=model_input, outputs=model_output)
 
     def train(self, model):
-
-        train_data_path = "Train_small"
-        validation_data_path = "Train_small"
+        train_data_path = "Validation"
+        validation_data_path = "Validation"
         # os.system('gsutil -m cp -r ' + self.image_path + '/Train_Class_batches .')
         # os.system('gsutil -m cp -r ' + self.image_path + '/Train_small_batches .')
-        os.system('gsutil -m cp -r ' + self.image_path + '/' + train_data_path + '/Train_small .')
-        # os.system('gsutil -m cp -r ' + self.image_path + '/' + validation_data_path + '/Train_small .')
-        os.system('gsutil cp ' + self.image_path + '/pts_in_hull.npy .')
-        os.system('gsutil cp ' + self.image_path + '/rebalance.npy .')
+        
 
         partition = {"train": [], "validation": []}
         for image in os.listdir(train_data_path):
@@ -130,11 +125,12 @@ class model:
         for image in os.listdir(validation_data_path):
             partition["validation"].append(os.path.join(validation_data_path, image))
         
-        batch_size = 32
+        batch_size = 64
         buckets = np.load("pts_in_hull.npy")
         rebalance = np.load("rebalance.npy")
-        num_train_batches = 5
-        num_validation_batches = 5
+        # num_train_batches = 4039
+        num_train_batches = 156
+        num_validation_batches = 156
         params = {"dim": (image_size, image_size),
                   "batch_size": batch_size,
                   "shuffle": True}
@@ -174,7 +170,7 @@ class model:
         #                           mode='auto',
         #                           period=5)
 
-        tensorboard = TensorBoard(log_dir=".", write_images=True, update_freq=50000)
+        tensorboard = TensorBoard(log_dir=self.output_path, write_images=True, update_freq=50000)
         callbacks = [tensorboard, checkpoint, every_2000_batches]
         # os.system('gsutil cp ' + self.image_path + '/Class_Train_R/currentWeights.h5 .')
         # model.load_weights("currentWeights.h5")
@@ -182,7 +178,7 @@ class model:
                     optimizer="adam",
                     metrics=['accuracy'])
 
-        model.fit_generator(training_generator, validation_data=validation_generator, validation_steps=num_validation_batches, callbacks=callbacks, steps_per_epoch=num_train_batches, epochs=200, workers=4, max_queue_size=10, use_multiprocessing=True) #5132 steps per epoch
+        model.fit_generator(training_generator, validation_data=validation_generator, validation_steps=num_validation_batches, callbacks=callbacks, steps_per_epoch=num_train_batches, epochs=5, workers=4, max_queue_size=8, use_multiprocessing=True) #5132 steps per epoch
         # model.fit_generator(batch_generator(batch_size), epochs=100, steps_per_epoch=5, validation_data=val_batch_generator(batch_size), validation_steps=5)
 
         # outputDate = now.strftime("%Y-%m-%d %Hh%Mm")

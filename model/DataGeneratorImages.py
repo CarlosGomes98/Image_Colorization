@@ -51,7 +51,8 @@ class DataGenerator(Sequence):
 
         for i, ID in enumerate(list_IDs_temp):
             # encoded_image = np.load(self.path + "/" + ID)
-            image = resize(imread(ID), self.dim, mode="reflect", anti_aliasing=True)
+            # print(ID)
+            image = resize(imread(ID), (*self.dim, 3), mode="reflect", anti_aliasing=True)
             image = rgb2lab(image)            
             L = image[:, :, 0]
             L = L - 50

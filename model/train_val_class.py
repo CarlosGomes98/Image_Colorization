@@ -112,7 +112,7 @@ class model:
         return Model(inputs=model_input, outputs=model_output)
 
     def train(self, model):
-        train_data_path = "Validation"
+        train_data_path = "Train_64"
         validation_data_path = "Validation"
         # os.system('gsutil -m cp -r ' + self.image_path + '/Train_Class_batches .')
         # os.system('gsutil -m cp -r ' + self.image_path + '/Train_small_batches .')
@@ -129,7 +129,7 @@ class model:
         buckets = np.load("pts_in_hull.npy")
         rebalance = np.load("rebalance.npy")
         # num_train_batches = 4039
-        num_train_batches = 156
+        num_train_batches = 2476
         num_validation_batches = 156
         params = {"dim": (image_size, image_size),
                   "batch_size": batch_size,
@@ -161,7 +161,7 @@ class model:
                                     save_best_only=True,
                                     mode="max")
 
-        every_2000_batches = WeightsSaver(2000, self.output_path)
+        every_2000_batches = WeightsSaver(1000, self.output_path)
 
         # every_10 = ModelCheckpoint("latest.hdf5",
         #                           monitor="accuracy",
@@ -170,7 +170,7 @@ class model:
         #                           mode='auto',
         #                           period=5)
 
-        tensorboard = TensorBoard(log_dir=self.output_path, write_images=True, update_freq=50000)
+        tensorboard = TensorBoard(log_dir=self.output_path, histogram_freq=0, write_images=True, update_freq=20000)
         callbacks = [tensorboard, checkpoint, every_2000_batches]
         # os.system('gsutil cp ' + self.image_path + '/Class_Train_R/currentWeights.h5 .')
         # model.load_weights("currentWeights.h5")
@@ -178,7 +178,7 @@ class model:
                     optimizer="adam",
                     metrics=['accuracy'])
 
-        model.fit_generator(training_generator, validation_data=validation_generator, validation_steps=num_validation_batches, callbacks=callbacks, steps_per_epoch=num_train_batches, epochs=5, workers=4, max_queue_size=8, use_multiprocessing=True) #5132 steps per epoch
+        model.fit_generator(training_generator, validation_data=validation_generator, validation_steps=num_validation_batches, callbacks=callbacks, steps_per_epoch=num_train_batches, epochs=7, workers=4, max_queue_size=8, use_multiprocessing=True) #5132 steps per epoch
         # model.fit_generator(batch_generator(batch_size), epochs=100, steps_per_epoch=5, validation_data=val_batch_generator(batch_size), validation_steps=5)
 
         # outputDate = now.strftime("%Y-%m-%d %Hh%Mm")

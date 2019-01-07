@@ -8,6 +8,7 @@ Options:
 """
 from docopt import docopt
 import os
+import zipfile
 from model.train_val_class import model
 
 if __name__ == '__main__':
@@ -18,8 +19,12 @@ if __name__ == '__main__':
     output_path = arguments['<image_path>']
     print("Image path: " + image_path)
     print("Output path: " + output_path)
-    # os.system('gsutil -m cp -r ' + image_path + '/Train' + '/Train .')
-    os.system('gsutil -m cp -r ' + image_path + '/Validation' + '/Validation .')
+    os.system('gsutil cp ' + image_path + '/Train_64.zip .')
+    with zipfile.ZipFile("Train_64.zip", 'r') as zip_ref:
+      zip_ref.extractall(".")
+    os.system('gsutil cp ' + image_path + '/Validation.zip .')
+    with zipfile.ZipFile("Validation.zip", 'r') as zip_ref:
+      zip_ref.extractall(".")
     os.system('gsutil cp ' + image_path + '/pts_in_hull.npy .')
     os.system('gsutil cp ' + image_path + '/rebalance.npy .')
     # Run the training job

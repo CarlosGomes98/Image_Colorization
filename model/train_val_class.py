@@ -67,7 +67,7 @@ class model:
         # conv1
         model_output = convLayer(model_input, 64, (3, 3))
         model_output = convLayer(model_output, 64, (3, 3), stride=2)
-        model_output = BatchNormalization()(model_output)
+        model_output = BatchNormalization()(model_output) #this might need axis=1
         # conv2
         model_output = convLayer(model_output, 128, (3, 3))
         model_output = convLayer(model_output, 128, (3, 3), stride=2)
@@ -79,9 +79,9 @@ class model:
         model_output = BatchNormalization()(model_output)
         # conv4
         # model_output = convLayer(model_output, 512, (3, 3))
-        model_output = convLayer(model_output, 512, (3, 3))
-        model_output = convLayer(model_output, 512, (3, 3))
-        model_output = BatchNormalization()(model_output)
+        # model_output = convLayer(model_output, 512, (3, 3))
+        # model_output = convLayer(model_output, 512, (3, 3))
+        # model_output = BatchNormalization()(model_output)
         # conv5
         # model_output = convLayer(model_output, 512, (3, 3), dilation=2)
         model_output = convLayer(model_output, 512, (3, 3), dilation=2)
@@ -125,12 +125,12 @@ class model:
         for image in os.listdir(validation_data_path):
             partition["validation"].append(os.path.join(validation_data_path, image))
         
-        batch_size = 64
+        batch_size = 32
         buckets = np.load("pts_in_hull.npy")
         rebalance = np.load("rebalance.npy")
         # num_train_batches = 4039
-        num_train_batches = 2476
-        num_validation_batches = 156
+        num_train_batches = 258500//batch_size
+        num_validation_batches = 10000//batch_size
         params = {"dim": (image_size, image_size),
                   "batch_size": batch_size,
                   "shuffle": True}
@@ -147,21 +147,21 @@ class model:
 
             def on_batch_end(self, batch, logs={}):
                 if self.batch % self.N == 0:
-                    name = 'currentWeights.h5'
-                    self.model.save_weights(name)
+                    name = 'current_model.h5'
+                    self.model.save(name)
                     try:
                         os.system('gsutil cp ' + name + ' ' + self.output_path)
                     except:
-                        print("Could not upload current weights")
+                        print("Could not upload current model")
                 self.batch += 1
 
         checkpoint = ModelCheckpoint("best.hdf5",
                                     monitor="accuracy",
                                     verbose=1,
                                     save_best_only=True,
-                                    mode="max")
+                                    mode="auto")
 
-        every_2000_batches = WeightsSaver(1000, self.output_path)
+        every_epoch = WeightsSaver(num_train_batches, self.output_path)
 
         # every_10 = ModelCheckpoint("latest.hdf5",
         #                           monitor="accuracy",
@@ -170,15 +170,15 @@ class model:
         #                           mode='auto',
         #                           period=5)
 
-        tensorboard = TensorBoard(log_dir=self.output_path, histogram_freq=0, write_images=True, update_freq=20000)
-        callbacks = [tensorboard, checkpoint, every_2000_batches]
-        # os.system('gsutil cp ' + self.image_path + '/Class_Train_R/currentWeights.h5 .')
-        # model.load_weights("currentWeights.h5")
+        tensorboard = TensorBoard(log_dir=self.output_path, histogram_freq=0, write_images=True, update_freq=10000)
+        callbacks = [tensorboard, checkpoint, every_epoch]
+        # os.system('gsutil cp ' + self.image_path + '/Class_64_64_zip/currentWeights.h5 .')
+        # model = load_model("currentWeights.h5")
         model.compile(loss="categorical_crossentropy",
                     optimizer="adam",
                     metrics=['accuracy'])
 
-        model.fit_generator(training_generator, validation_data=validation_generator, validation_steps=num_validation_batches, callbacks=callbacks, steps_per_epoch=num_train_batches, epochs=7, workers=4, max_queue_size=8, use_multiprocessing=True) #5132 steps per epoch
+        model.fit_generator(training_generator, validation_data=validation_generator, validation_steps=num_validation_batches, callbacks=callbacks, steps_per_epoch=num_train_batches, epochs=5, workers=4, max_queue_size=8, use_multiprocessing=True) #5132 steps per epoch
         # model.fit_generator(batch_generator(batch_size), epochs=100, steps_per_epoch=5, validation_data=val_batch_generator(batch_size), validation_steps=5)
 
         # outputDate = now.strftime("%Y-%m-%d %Hh%Mm")
@@ -186,17 +186,17 @@ class model:
         # os.mkdir(outputDate)
         # os.chdir(outputDate)
         try:
-            model.save_weights("model_weights.h5")
+            model.save_weights("last_model_weights.h5")
             model.save("model.h5")
         # else:
         #     model.load_weights("/floyd/input/model/my_model_weights.h5")
         except:
             print("Could not save")
 
-        os.system('gsutil cp model_weights.h5 ' + self.output_path)
+        os.system('gsutil cp last_model_weights.h5 ' + self.output_path)
         os.system('gsutil cp model.h5 ' + self.output_path)
         os.system('gsutil cp best.hdf5 ' + self.output_path)
-        os.system('gsutil cp latest.hdf5 ' + self.output_path)
+        # os.system('gsutil cp latest.hdf5 ' + self.output_path)
 
     def set_up_and_train(self):
         model = self.set_up_model()

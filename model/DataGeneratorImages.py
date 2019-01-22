@@ -25,9 +25,19 @@ def soft_encode_bucketize(image_ab, nearest_neighbors, rebalance):
         y = y * rebalance[np.argmax(y, axis=1)][:, np.newaxis]
     return y
 
+def one_hot_bucketize(image_ab, buckets):
+    #calculate the distances from each pixel to each bucket
+    distances = np.zeros((image_ab.shape[0]*image_ab.shape[0], buckets.shape[0]))
+    distances = cdist(image_ab.reshape(image_ab.shape[0]*image_ab.shape[0], 2), buckets)
+    closest_buckets = np.argmin(distances, axis=1).reshape(image_ab.shape[0], image_ab.shape[0]).astype(int)
+    identity = np.identity(buckets.shape[0])
+    bucketized = np.zeros(image_ab.shape[0], image_ab.shape[1], buckets.shape[0]))
+    bucketized = identity[closest_buckets]
+    return bucketized.reshape(bucketized.shape + (1,))
+
 class DataGenerator(Sequence):
 
-    def __init__(self, images, buckets, rebalance, batch_size=32, dim=(32,32), shuffle=True):
+    def __init__(self, images, buckets, rebalance, batch_size=64, dim=(64,64), shuffle=True):
         #Initialization
         self.dim = dim
         self.images = images
@@ -60,6 +70,10 @@ class DataGenerator(Sequence):
             L = L.reshape(L.shape+(1,))
             X[i,] = L
 
+            # if rebalance is None:
+            #     Y[i,] = one_hot_bucketize(image[:, :, 1:], self.buckets)
+            # else:
+            #     Y[i,] = soft_encode_bucketize(image[:, :, 1:], self.nn, self.rebalance)
             Y[i,] = soft_encode_bucketize(image[:, :, 1:], self.nn, self.rebalance)
         
         return X, Y

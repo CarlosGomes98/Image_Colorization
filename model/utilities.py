@@ -2,12 +2,16 @@ import numpy as np
 # from keras.preprocessing.image import img_to_array, load_img, ImageDataGenerator
 # from keras.layers import Conv2D
 from skimage import io, color, transform
-from sklearn.neighbors import NearestNeighbors
+import sklearn.neighbors as nn
 from scipy.spatial.distance import cdist
 from matplotlib import pyplot as plt
+import tensorflow as tf
 # from google.cloud import storage
 import os
-image_size = 64
+image_size = 128
+buckets = np.load("model/pts_in_hull.npy")
+rebalance = np.load("model/rebalance.npy")
+nearest_neighbors = nn.NearestNeighbors(n_neighbors=5, algorithm="ball_tree").fit(buckets)
 # def read_image(img_id, dir):
 #     try:
 #         img = load_img(dir + "/" + img_id, target_size=(image_size, image_size))
@@ -19,6 +23,19 @@ image_size = 64
 def show_image(image):
     plt.imshow(image/255.)
     plt.show()
+
+def rgb2lab_32(image):
+    return color.rgb2lab(image).astype(np.float32)
+
+def parse_function(filename):
+    image_string = tf.read_file(filename)
+    image = tf.image.decode_jpeg(image_string, ratio=2, channels=3)
+    image_lab = tf.py_func(rgb2lab_32, [image], tf.float32)
+    image_L = tf.py_func(preprocess_and_return_X, [image_lab], tf.float32)
+    image_L = tf.reshape(image_L, [128, 128, 1])
+    image_bucketized = tf.py_func(soft_encode_bucketize, [image_lab], tf.float32)
+    image_bucketized = tf.reshape(image_bucketized, [128*128, 313])
+    return image_L, image_bucketized
 
 def printOutput(file, output):
     for y in range(image_size):
@@ -32,7 +49,7 @@ def preprocess_and_return_X_batch(images):
     X = images[:, :, :, 0]
     X = X - 50
     X = X/50
-    X = X.reshape(X.shape+(1,))
+    X = X.reshape(X.shape+(1,)).astype(np.float32)
     return X
 
 def preprocess_and_return_X(image):
@@ -66,6 +83,27 @@ def preprocess_and_return_X(image):
 
 #     result = [blob.name for blob in blobs]
 #     return result
+
+def soft_encode_bucketize(image):
+    image_ab = image[:, :, 1:]
+    h, w = image_ab.shape[:2]
+    a = np.ravel(image_ab[:, :, 0])
+    b = np.ravel(image_ab[:, :, 1])
+    #h*w, 2 matrix where each row is an ab pair corresponding to a pixel
+    ab = np.vstack((a, b)).T
+    # Get the distance to and the idx of the nearest neighbors
+    dist_neighbors, idx_neighbors = nearest_neighbors.kneighbors(ab)
+    # Smooth the weights with a gaussian kernel
+    sigma = 5
+    weights = np.exp(-dist_neighbors ** 2 / (2 * sigma ** 2))
+    weights = weights / np.sum(weights, axis=1)[:, np.newaxis]
+    # format the tar get
+    y = np.zeros((ab.shape[0], 313))
+    indeces = np.arange(ab.shape[0])[:, np.newaxis]
+    y[indeces, idx_neighbors] = weights
+    if not rebalance is None:
+        y = y * rebalance[np.argmax(y, axis=1)][:, np.newaxis]
+    return y.astype(np.float32)
 
 def decode_bucketize_images(images_to_bucketize, rebalance, batch_size):
     closest_buckets = images_to_bucketize[:, :, :, 1].astype(int)

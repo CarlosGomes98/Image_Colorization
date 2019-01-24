@@ -1,4 +1,4 @@
-from keras.utils import Sequence
+from tensorflow.keras.utils import Sequence
 import numpy as np
 import sklearn.neighbors as nn
 from skimage.io import imread
@@ -31,13 +31,13 @@ def one_hot_bucketize(image_ab, buckets):
     distances = cdist(image_ab.reshape(image_ab.shape[0]*image_ab.shape[0], 2), buckets)
     closest_buckets = np.argmin(distances, axis=1).reshape(image_ab.shape[0], image_ab.shape[0]).astype(int)
     identity = np.identity(buckets.shape[0])
-    bucketized = np.zeros(image_ab.shape[0], image_ab.shape[1], buckets.shape[0]))
+    bucketized = np.zeros((image_ab.shape[0], image_ab.shape[1], buckets.shape[0]))
     bucketized = identity[closest_buckets]
     return bucketized.reshape(bucketized.shape + (1,))
 
 class DataGenerator(Sequence):
 
-    def __init__(self, images, buckets, rebalance, batch_size=64, dim=(64,64), shuffle=True):
+    def __init__(self, images, buckets, rebalance, batch_size=32, dim=(128,128), shuffle=True):
         #Initialization
         self.dim = dim
         self.images = images
@@ -56,13 +56,13 @@ class DataGenerator(Sequence):
     
     def __data_generation(self, list_IDs_temp):
         # 'Generates data containing batch_size samples' # X : (n_samples, *dim, n_channels)
-        X = np.empty((self.batch_size, *self.dim, 1))
+        X = np.empty((self.batch_size, self.dim[0], self.dim[1], 1))
         Y = np.empty((self.batch_size, self.dim[0]*self.dim[1], 313))
 
         for i, ID in enumerate(list_IDs_temp):
             # encoded_image = np.load(self.path + "/" + ID)
             # print(ID)
-            image = resize(imread(ID), (*self.dim, 3), mode="reflect", anti_aliasing=True)
+            image = resize(imread(ID), (self.dim[0], self.dim[1], 3), mode="reflect", anti_aliasing=True)
             image = rgb2lab(image)            
             L = image[:, :, 0]
             L = L - 50

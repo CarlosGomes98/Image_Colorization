@@ -133,15 +133,15 @@ class model:
         for image in os.listdir(validation_data_path):
             partition["validation"].append(os.path.join(validation_data_path, image))
         
-        train_dataset = tf.data.Dataset.from_tensor_slices(partition["train"]).repeat()
-        train_dataset = train_dataset.shuffle(len(partition["train"]))
+        train_dataset = tf.data.Dataset.from_tensor_slices(partition["train"])
+        train_dataset = train_dataset.apply(tf.data.experimental.shuffle_and_repeat(len(partition["train"])))
         train_dataset = train_dataset.map(parse_function, num_parallel_calls=8)
         train_dataset = train_dataset.batch(batch_size)
         train_dataset = train_dataset.prefetch(1)
 
-        validation_dataset = tf.data.Dataset.from_tensor_slices(partition["validation"]).repeat()
+        validation_dataset = tf.data.Dataset.from_tensor_slices(partition["validation"])
         validation_dataset = validation_dataset.shuffle(len(partition["validation"]))
-        validation_dataset = validation_dataset.map(parse_function, num_parallel_calls=1)
+        validation_dataset = validation_dataset.map(parse_function, num_parallel_calls=1).repeat()
         validation_dataset = validation_dataset.batch(batch_size)
         validation_dataset = validation_dataset.prefetch(1)
         buckets = np.load("model/pts_in_hull.npy")

@@ -22,44 +22,19 @@ else:
     print('Failed to find default GPU.')
     sys.exit(1)
 
-# def categorical_crossentropy_color(y_pred, y_true):
-#     closest_colors = K.argmax(y_true, axis=-1)
-#     weights = K.gather(np.load("rebalance.npy").astype(np.float32), closest_colors)
-#     weights = K.reshape(weights, (-1, 1))
-#     #enhance rarer colors
-#     y_true = y_true * weights
-
-#     cross_entropy = K.categorical_crossentropy(y_pred, y_true)
-#     cross_entropy = K.mean(cross_entropy, axis=-1)
-
-#     return cross_entropy
 
 def convLayer(input, filters, kernel_size, dilation=1, stride=1):
         return Conv2D(filters, kernel_size, padding="same", activation="relu", dilation_rate=dilation, strides=stride)(input)
 
 class model:
-    def __init__(self, image_path, output_path):
+    def __init__(self, image_path, output_path, model_path):
         self.image_path = image_path
         self.output_path = output_path
-        self.current_epoch = 0
+        self.model_path = model_path
+        self.current_epoch = 1
         print("Image path: " + image_path)
         print("Output path: " + output_path)
-
-    # def prepare_test_data(self):
-    #     test = []
-    #     files = os.listdir(self.image_path + "/Test/Test")[:200]
-    #     for image in files:
-    #         img = read_image(image, self.image_path + "/Test/Test")
-    #         if not img is None:
-    #             img = np.array(img, dtype=np.float32)
-    #             test.append(img)
-    #     test = np.array(test, dtype=np.float32)
-
-    #     test = test*(1.0/255)
-    #     test = color.rgb2lab(test)
-    #     test = preprocess(test)
-    #     return test
-
+    
     def get_epoch(self):
         self.current_epoch = self.current_epoch + 1
         return self.current_epoch
@@ -114,15 +89,19 @@ class model:
         model_output = Conv2D(313, (1, 1), activation="relu", padding="same")(model_output)
         model_output = Reshape((image_size*image_size, 313))(model_output)
         model_output = Activation("softmax")(model_output)
-        return Model(inputs=model_input, outputs=model_output)
+        model = Model(inputs=model_input, outputs=model_output)
+
+        model.compile(loss="categorical_crossentropy",
+                    optimizer="adam",
+                    metrics=['accuracy'])
+        
+        return model
 
     def train(self, model):
-        self.output_path = self.output_path+"/"+datetime.datetime.now().strftime("%Y-%m-%d %Hh%Mm")
+        self.output_path = self.output_path+"/"+datetime.datetime.now().strftime("%Y-%m-%d--%Hh%Mm")
         os.mkdir(self.output_path)
         train_data_path = os.path.join(self.image_path, "Train")
         validation_data_path = os.path.join(self.image_path, "Validation")
-        # os.system('gsutil -m cp -r ' + self.image_path + '/Train_Class_batches .')
-        # os.system('gsutil -m cp -r ' + self.image_path + '/Train_small_batches .')
         
         batch_size = 16
 
@@ -141,7 +120,7 @@ class model:
 
         validation_dataset = tf.data.Dataset.from_tensor_slices(partition["validation"])
         validation_dataset = validation_dataset.shuffle(len(partition["validation"]))
-        validation_dataset = validation_dataset.map(parse_function, num_parallel_calls=1).repeat()
+        validation_dataset = validation_dataset.map(parse_function, num_parallel_calls=4).repeat()
         validation_dataset = validation_dataset.batch(batch_size)
         validation_dataset = validation_dataset.prefetch(1)
         buckets = np.load("model/pts_in_hull.npy")
@@ -167,13 +146,15 @@ class model:
                     #     print("Could not upload current model")
                 self.batch += 1
 
-        checkpoint_best = ModelCheckpoint(os.path.join(self.output_path, "epoch_"+str(self.get_epoch())+".hdf5"),
-                                    monitor="val_acc",
+        checkpoint = ModelCheckpoint(os.path.join(self.output_path, "curr.hdf5"),
+                                    monitor="val_loss",
                                     verbose=1,
+                                    save_weights_only = False,
                                     save_best_only=False,
-                                    mode="auto")
+                                    mode="auto",
+                                    period=1)
 
-        every_epoch = WeightsSaver(num_train_batches, self.output_path)
+        # every_epoch = WeightsSaver(num_train_batches, self.output_path)
 
         # every_10 = ModelCheckpoint("latest.hdf5",
         #                           monitor="accuracy",
@@ -183,38 +164,20 @@ class model:
         #                           period=5)
 
         tensorboard = TensorBoard(log_dir=self.output_path, histogram_freq=0, write_images=True)
-        callbacks = [tensorboard, checkpoint_best]
-        # os.system('gsutil cp ' + self.image_path + '/Class_64_64_zip/currentWeights.h5 .')
-        # model = load_model("currentWeights.h5")
-        model.compile(loss="categorical_crossentropy",
-                    optimizer="adam",
-                    metrics=['accuracy'])
+        callbacks = [tensorboard, checkpoint]
 
         model.fit(train_dataset.make_one_shot_iterator(),
                   validation_data = validation_dataset.make_one_shot_iterator(),
                   callbacks=callbacks,
                   steps_per_epoch=num_train_batches,
                   validation_steps=num_validation_batches,
-                  epochs=5)
+                  epochs=2)
 
         model.save(os.path.join(self.output_path, "model.h5"))
-        # outputDate = now.strftime("%Y-%m-%d %Hh%Mm")
-        # os.chdir("output")
-        # os.mkdir(outputDate)
-        # os.chdir(outputDate)
-        # try:
-        #     model.save_weights("last_model_weights.h5")
-        #     model.save("model.h5")
-        # # else:
-        # #     model.load_weights("/floyd/input/model/my_model_weights.h5")
-        # except:
-        #     print("Could not save")
-
-        # os.system('gsutil cp last_model_weights.h5 ' + self.output_path)
-        # os.system('gsutil cp model.h5 ' + self.output_path)
-        # os.system('gsutil cp best.hdf5 ' + self.output_path)
-        # os.system('gsutil cp latest.hdf5 ' + self.output_path)
 
     def set_up_and_train(self):
-        model = self.set_up_model()
+        if self.model_path is None:
+            model = self.set_up_model()
+        else :
+            model = load_model(self.model_path)
         self.train(model)

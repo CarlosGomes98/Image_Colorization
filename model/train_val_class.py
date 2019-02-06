@@ -171,7 +171,7 @@ class model:
                   callbacks=callbacks,
                   steps_per_epoch=num_train_batches,
                   validation_steps=num_validation_batches,
-                  epochs=2)
+                  epochs=3)
 
         model.save(os.path.join(self.output_path, "model.h5"))
 

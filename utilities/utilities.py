@@ -35,9 +35,6 @@ def preprocess_and_return_X(examples):
     examples = examples.reshape(examples.shape+(1,))
     return examples
 
-def convLayer(input, filters, kernel_size, dilation=1, stride=1):
-    return Conv2D(filters, kernel_size, padding="same", activation="relu", dilation_rate=dilation, strides=stride)(input)
-
 def bucketize(images_to_bucketize, batch_size, rebalance):
     closest_buckets = np.sum(images_to_bucketize[:, :, :, 1:], axis=3, dtype=int)
     identity = np.identity(313)

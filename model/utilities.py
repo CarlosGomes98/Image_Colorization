@@ -37,6 +37,16 @@ def parse_function(filename):
     image_bucketized = tf.reshape(image_bucketized, [128*128, 313])
     return image_L, image_bucketized
 
+def mse_parse_function(filename):
+    image_string = tf.read_file(filename)
+    image = tf.image.decode_jpeg(image_string, channels=3)
+    image_lab = tf.py_func(rgb2lab_32, [image], tf.float32)
+    image_lab = tf.reshape(image_lab, [256, 256, 3])
+    image_L = tf.py_func(preprocess_and_return_X, [image_lab], tf.float32)
+    image_L = tf.reshape(image_L, [256, 256, 1])
+    image_ab = image_lab[:, :, 1:]/128
+    return image_L, image_ab
+
 def printOutput(file, output):
     for y in range(image_size):
         row = ""

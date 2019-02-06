@@ -1,26 +1,27 @@
 import datetime
 from sklearn.model_selection import train_test_split
-from keras.models import Model, load_model
-from keras.layers import Input, UpSampling2D, Conv2D, Dense, Dropout, BatchNormalization, Flatten, Conv2DTranspose
+from tensorflow.keras.models import Model, load_model
+from tensorflow.keras.layers import Input, UpSampling2D, Conv2D, Dense, Dropout, BatchNormalization, Flatten, Conv2DTranspose
 import os, sys
-from keras.preprocessing.image import img_to_array, load_img, ImageDataGenerator
+from tensorflow.keras.preprocessing.image import img_to_array, load_img, ImageDataGenerator
 import numpy as np
 from skimage import io, color
-from keras.preprocessing import image
+from tensorflow.keras.preprocessing import image
 import tensorflow as tf
-from keras.callbacks import TensorBoard, ModelCheckpoint, Callback
+from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, Callback
 from tensorflow.python.client import device_lib
 print(device_lib.list_local_devices())
-from utilities.utilities import read_image, show_image, preprocess_and_return_X, convLayer
+from utilities import preprocess_and_return_X_batch, mse_parse_function
 image_size = 256
 
-class model:
-	image_path=""
-	output_path=""
+def convLayer(input, filters, kernel_size, dilation=1, stride=1):
+    return Conv2D(filters, kernel_size, padding="same", activation="relu", dilation_rate=dilation, strides=stride)(input)
 
-	def __init__(self, image_path, output_path):
+class model:
+	def __init__(self, image_path, output_path, model_path):
 		self.image_path = image_path
 		self.output_path = output_path
+		self.model_path = model_path
 
 	def set_up_model(self):
 		input_shape = (image_size, image_size, 1)
@@ -61,33 +62,35 @@ class model:
 		return Model(inputs=model_input, outputs=model_output)
 
 	def train(self, model):
-		datagen = ImageDataGenerator(rescale=(1./255))
-
-		val_datagen = ImageDataGenerator(rescale=(1./255))
+		self.output_path = self.output_path+"/"+datetime.datetime.now().strftime("%Y-%m-%d--%Hh%Mm")
+		os.mkdir(self.output_path)
+		train_data_path = os.path.join(self.image_path, "Train")
+		validation_data_path = os.path.join(self.image_path, "Validation")
         # Download Train and Validation data
 		# os.system('gsutil -m cp -r ' + self.image_path + '/Train .')
-		os.system('gsutil -m cp -r ' + self.image_path + '/Validation .')
+		# os.system('gsutil -m cp -r ' + self.image_path + '/Validation .')
 
-		batch_size = 32
-		def batch_generator(batch_size):
-		    for batch in datagen.flow_from_directory("Validation",
-		                                             target_size=(image_size, image_size),
-		                                             class_mode="input",
-		                                             batch_size = batch_size):
-		        lab = color.rgb2lab(batch[0])
-		        X = preprocess_and_return_X(lab)
-		        Y = lab[:, :, :, 1:] / 128
-		        yield ([X, Y])
+		batch_size = 16
+		num_train_batches = 258500//batch_size
+		num_validation_batches = 10000//batch_size
+		partition = {"train": [], "validation": []}
+		for image in os.listdir(train_data_path):
+			partition["train"].append(os.path.join(train_data_path, image))
+        
+		for image in os.listdir(validation_data_path):
+			partition["validation"].append(os.path.join(validation_data_path, image))
+        
+		train_dataset = tf.data.Dataset.from_tensor_slices(partition["train"])
+		train_dataset = train_dataset.apply(tf.data.experimental.shuffle_and_repeat(len(partition["train"])))
+		train_dataset = train_dataset.map(mse_parse_function, num_parallel_calls=8)
+		train_dataset = train_dataset.batch(batch_size)
+		train_dataset = train_dataset.prefetch(1)
 
-		def val_batch_generator(batch_size):
-		    for batch in val_datagen.flow_from_directory("Validation",
-		                                             target_size=(image_size, image_size),
-		                                             class_mode="input",
-		                                             batch_size = batch_size):
-		        lab = color.rgb2lab(batch[0])
-		        X = preprocess_and_return_X(lab)
-		        Y = lab[:, :, :, 1:] / 128
-		        yield ([X, Y])
+		validation_dataset = tf.data.Dataset.from_tensor_slices(partition["validation"])
+		validation_dataset = validation_dataset.shuffle(len(partition["validation"]))
+		validation_dataset = validation_dataset.map(mse_parse_function, num_parallel_calls=4).repeat()
+		validation_dataset = validation_dataset.batch(batch_size)
+		validation_dataset = validation_dataset.prefetch(1)
 
 		model.summary()
 
@@ -100,24 +103,23 @@ class model:
 			def on_batch_end(self, batch, logs={}):
 				if self.batch % self.N == 0:
 					name = 'currentWeights.h5'
-					self.model.save_weights(name)
-					try:
-						os.system('gsutil cp ' + name + ' ' + self.output_path)
-					except:
-						print("Could not upload current weights")
+					self.model.save(os.path.join(self.output_path, "model.h5"))
 				self.batch += 1
 
-		checkpoint = ModelCheckpoint("best.hdf5",
-		                            monitor="accuracy",
-		                            verbose=1,
-		                            save_best_only=True,
-		                            mode="max")
+		checkpoint = ModelCheckpoint(os.path.join(self.output_path, "curr.hdf5"),
+                                    monitor="val_loss",
+                                    verbose=1,
+                                    save_weights_only = False,
+                                    save_best_only=False,
+                                    mode="auto",
+                                    period=1)
+
 
 		every_20_batches = WeightsSaver(20, self.output_path)
 
 
-		tensorboard = TensorBoard(log_dir=".")
-		callbacks = [tensorboard, checkpoint, every_20_batches]
+		tensorboard = TensorBoard(log_dir=self.output_path, histogram_freq=0, write_images=True)
+		callbacks = [tensorboard, checkpoint]
 
         # Uncomment to continue previous training
         # model.load_weights("/content/drive/My Drive/app/output/2018-09-29 14:58/latest.hdf5")#manually change this, i know, i know
@@ -126,18 +128,19 @@ class model:
 		            optimizer="adam",
 		            metrics=['accuracy'])
 
-		model.fit_generator(batch_generator(batch_size), callbacks=callbacks, epochs=3, steps_per_epoch=4040, validation_data=val_batch_generator(batch_size), validation_steps=157) #5132 steps per epoch
+		model.fit(train_dataset.make_one_shot_iterator(),
+                  validation_data = validation_dataset.make_one_shot_iterator(),
+                  callbacks=callbacks,
+                  steps_per_epoch=num_train_batches,
+                  validation_steps=num_validation_batches,
+                  epochs=5)
 
-		try:
-			model.save_weights("model_weights.h5")
-			model.save("model.h5")
-		except:
-			print("Could not save")
+		model.save(os.path.join(self.output_path, "model.h5"))
 
-		os.system('gsutil cp model_weights.h5 ' + self.output_path)
-		os.system('gsutil cp model.h5 ' + self.output_path)
-		os.system('gsutil cp best.hdf5 ' + self.output_path)
-		os.system('gsutil cp latest.h5 ' + self.output_path)
+		# os.system('gsutil cp model_weights.h5 ' + self.output_path)
+		# os.system('gsutil cp model.h5 ' + self.output_path)
+		# os.system('gsutil cp best.hdf5 ' + self.output_path)
+		# os.system('gsutil cp latest.h5 ' + self.output_path)
 
 	# # Test model
 	# def test(self, test, model):

@@ -134,3 +134,75 @@ class model:
         gan.compile(loss='binary_crossentropy', optimizer = Adam(lr=.001))
         print("-------------------------GAN--------------------------")
         print(gan.summary())
+        return gan
+
+    def train(self, model):
+        '''
+        This function will carry out the training of the gan, including the discriminator step
+        '''
+        batch_size = 16
+        self.output_path = self.output_path+"/"+datetime.datetime.now().strftime("%Y-%m-%d--%Hh%Mm")
+        os.mkdir(self.output_path)
+        train_data_path = os.path.join(self.image_path, "Train")
+        validation_data_path = os.path.join(self.image_path, "Validation")
+
+        partition = {"train": [], "validation": []}
+        for image in os.listdir(train_data_path):
+            partition["train"].append(os.path.join(train_data_path, image))
+
+        for image in os.listdir(validation_data_path):
+            partition["validation"].append(os.path.join(validation_data_path, image))
+
+        train_dataset = tf.data.Dataset.from_tensor_slices(partition["train"])
+        train_dataset = train_dataset.apply(tf.data.experimental.shuffle_and_repeat(len(partition["train"])))
+        train_dataset = train_dataset.map(mse_parse_function, num_parallel_calls=8)
+        train_dataset = train_dataset.batch(batch_size/2)
+        train_dataset = train_dataset.prefetch(1)
+        train_iterator = train_dataset.make_one_shot_iterator()
+
+        validation_dataset = tf.data.Dataset.from_tensor_slices(partition["validation"])
+        validation_dataset = validation_dataset.shuffle(len(partition["validation"]))
+        validation_dataset = validation_dataset.map(mse_parse_function, num_parallel_calls=4).repeat()
+        validation_dataset = validation_dataset.batch(batch_size/2)
+        validation_dataset = validation_dataset.prefetch(1)
+        validation_iterator = train_dataset.make_one_shot_iterator()
+
+        epochs = 5
+        num_train_batches = 258500//batch_size
+        num_validation_batches = 10000//batch_size
+        for e in range(epochs):
+            for b in range(num_train_batches):
+                X_train, Y_train = train_iterator.next()
+                X_val, Y_val = validation_iterator.next()
+
+                generated_ab = self.generator.predict(X_train)
+
+                real_images = np.concatenate(X_train, Y_train, axis=2)
+                real_images_labels = np.ones((batch_size/2, 1))
+                generated_images = np.concatenate(X_train, generated_ab, axis=2)
+                generated_images_labels = np.zeros((batch_size/2, 1))
+
+                disc_x_train = np.concatenate(real_images, generated_images)
+                disc_y_train = np.concatenate(real_images_labels, generated_images_labels)
+
+                generated_ab_val = self.generator.predict(X_val)
+
+                real_images_val = np.concatenate(X_val, Y_val, axis=2)
+                real_images_val_labels = np.ones((batch_size/2, 1))
+                generated_images_val = np.concatenate(X_val, generated_ab, axis=2)
+                generated_images_val_labels = np.zeros((batch_size/2, 1))
+
+                disc_x_val = np.concatenate(real_images_val, generated_images_val)
+                disc_y_val = np.concatenate(real_images_val_labels, generated_images_val_labels)
+
+                self.discriminator.train_on_batch(disc_x_train, disc_y_train)
+
+                #TODO: validation
+                #TODO: record loss
+
+    def set_up_and_train(self):
+        if self.model_path is None:
+            model = self.set_up_model()
+        else:
+            model = load_model(self.model_path)
+        self.train(model)

@@ -34,7 +34,7 @@ class model:
         self.current_epoch = 1
         print("Image path: " + image_path)
         print("Output path: " + output_path)
-    
+
     def get_epoch(self):
         self.current_epoch = self.current_epoch + 1
         return self.current_epoch
@@ -94,7 +94,7 @@ class model:
         model.compile(loss="categorical_crossentropy",
                     optimizer="adam",
                     metrics=['accuracy'])
-        
+
         return model
 
     def train(self, model):
@@ -102,16 +102,16 @@ class model:
         os.mkdir(self.output_path)
         train_data_path = os.path.join(self.image_path, "Train")
         validation_data_path = os.path.join(self.image_path, "Validation")
-        
+
         batch_size = 16
 
         partition = {"train": [], "validation": []}
         for image in os.listdir(train_data_path):
             partition["train"].append(os.path.join(train_data_path, image))
-        
+
         for image in os.listdir(validation_data_path):
             partition["validation"].append(os.path.join(validation_data_path, image))
-        
+
         train_dataset = tf.data.Dataset.from_tensor_slices(partition["train"])
         train_dataset = train_dataset.apply(tf.data.experimental.shuffle_and_repeat(len(partition["train"])))
         train_dataset = train_dataset.map(parse_function, num_parallel_calls=8)
@@ -178,6 +178,6 @@ class model:
     def set_up_and_train(self):
         if self.model_path is None:
             model = self.set_up_model()
-        else :
+        else:
             model = load_model(self.model_path)
         self.train(model)

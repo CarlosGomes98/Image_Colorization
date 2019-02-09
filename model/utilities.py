@@ -47,6 +47,16 @@ def mse_parse_function(filename):
     image_ab = image_lab[:, :, 1:]/128
     return image_L, image_ab
 
+def mse_parse_function_gan(filename):
+    image_string = tf.read_file(filename)
+    image = tf.image.decode_jpeg(image_string, ratio=2, channels=3)
+    image_lab = tf.py_func(rgb2lab_32, [image], tf.float32)
+    image_lab = tf.reshape(image_lab, [128, 128, 3])
+    image_L = tf.py_func(preprocess_and_return_X, [image_lab], tf.float32)
+    image_L = tf.reshape(image_L, [128, 128, 1])
+    image_ab = image_lab[:, :, 1:]/128
+    return image_L, image_ab
+
 def printOutput(file, output):
     for y in range(image_size):
         row = ""

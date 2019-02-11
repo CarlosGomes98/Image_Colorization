@@ -1,7 +1,8 @@
 import datetime
-import os, sys
+import os
+import sys
+import time, datetime
 import numpy as np
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow as tf
 from skimage import io, color
 import tensorflow.keras.backend as K
@@ -17,6 +18,8 @@ from tensorflow.python.client import device_lib
 from utilities import mse_parse_function_gan, preprocess_and_return_X_batch
 print(device_lib.list_local_devices())
 image_size = 128
+
+tf.logging.set_verbosity(tf.logging.ERROR)
 
 def convLayer(input, filters, kernel_size, dilation=1, stride=1, activation="relu"):
 	return Conv2D(filters, kernel_size, padding="same", activation=activation, dilation_rate=dilation, strides=stride)(input)
@@ -109,7 +112,7 @@ class model:
 		print(self.generator.summary())
 
 		self.discriminator = build_discriminator()
-		self.discriminator.compile(loss='binary_crossentropy', optimizer = Adam(lr=.001), metrics=['accuracy'])
+		self.discriminator.compile(loss='binary_crossentropy', optimizer = Adam(lr=.0001), metrics=['accuracy'])
 		print("---------------------Discriminator---------------------")
 		print(self.discriminator.summary())
 
@@ -175,6 +178,7 @@ class model:
 		# num_validation_batches = 32//batch_size
 		real_images_labels = np.ones((batch_size, 1))
 		generated_images_labels = np.zeros((batch_size, 1))
+		start_time = time.time()
 		def val_batch_generator(batch_size):
 		    for val_batch in val_datagen.flow_from_directory(validation_data_path,
 		                                             target_size=(image_size, image_size),
@@ -205,15 +209,16 @@ class model:
 				np.random.shuffle(shuffle_indices)
 				disc_x_train_shuffled = np.squeeze(disc_x_train[shuffle_indices])
 				disc_y_train_shuffled = np.squeeze(disc_y_train[shuffle_indices])
-				loss, acc = self.discriminator.train_on_batch(disc_x_train_shuffled, disc_y_train_shuffled)
-				model.train_on_batch(X_train, real_images_labels)
+				disc_loss, disc_acc = self.discriminator.train_on_batch(disc_x_train_shuffled, disc_y_train_shuffled)
+				gen_loss = model.train_on_batch(X_train, real_images_labels)
 				curr_batch = curr_batch + 1
 				
-				print ("[Epoch %d/%d] [Batch %d/%d] [D loss: %f, acc: %f] [G loss: %f] time: %s" % (e, epochs,
+				sys.stdout.write("\r[Epoch %d/%d] [Batch %d/%d] [D loss: %f, acc: %f] [G loss: %f] Estimated time left: %s" % (e, epochs,
                                                                         curr_batch, num_train_batches,
-                                                                        loss, acc,
-                                                                        0,
-                                                                        0))
+                                                                        disc_loss, disc_acc,
+                                                                        gen_loss,
+                                                                        str(datetime.timedelta(seconds=((time.time() - start_time)/curr_batch) * (num_train_batches-curr_batch)))))
+				sys.stdout.flush()
 				if curr_batch >= num_train_batches:
 					print(str(self.discriminator.metrics_names) + " : " + str(self.discriminator.evaluate_generator(val_batch_generator(batch_size), steps=num_validation_batches)))
 					break

@@ -64,8 +64,8 @@ class model:
 	def train(self, model):
 		self.output_path = self.output_path+"/"+datetime.datetime.now().strftime("%Y-%m-%d--%Hh%Mm")
 		os.mkdir(self.output_path)
-		train_data_path = os.path.join(self.image_path, "Train")
-		validation_data_path = os.path.join(self.image_path, "Validation")
+		train_data_path = os.path.join(self.image_path, "Train_1", "Train")
+		validation_data_path = os.path.join(self.image_path, "Validation_1", "Validation")
         # Download Train and Validation data
 		# os.system('gsutil -m cp -r ' + self.image_path + '/Train .')
 		# os.system('gsutil -m cp -r ' + self.image_path + '/Validation .')

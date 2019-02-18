@@ -5,13 +5,13 @@ import time, datetime
 import numpy as np
 import tensorflow as tf
 from skimage import io, color
-import tensorflow.keras.backend as K
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.preprocessing import image
-from tensorflow.keras.models import Model, load_model
-from tensorflow.keras.layers import Activation, Input, UpSampling2D, Conv2D, Conv1D, Dense, Dropout, BatchNormalization, Flatten, Conv2DTranspose, Reshape, Concatenate
-from tensorflow.keras.layers import LeakyReLU
-from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, Callback
+import keras.backend as K
+from keras.optimizers import Adam
+from keras.preprocessing import image
+from keras.models import Model, load_model
+from keras.layers import Activation, Input, UpSampling2D, Conv2D, Conv1D, Dense, Dropout, BatchNormalization, Flatten, Conv2DTranspose, Reshape, Concatenate
+from keras.layers import LeakyReLU
+from keras.callbacks import TensorBoard, ModelCheckpoint, Callback
 from sklearn.model_selection import train_test_split
 from DataGeneratorImages import DataGenerator
 from tensorflow.python.client import device_lib
@@ -49,7 +49,11 @@ class model:
 		self.generator_input_shape = (128, 128, 1)
 		self.discriminator_input_shape = (128, 128, 2)
 
+		# Maybe switch to U-Net
 		def build_generator():
+			if self.model_path is not None:
+				return load_model(os.path.join(self.model_path, "generator.h5"))
+		
 			generator_input = Input(self.generator_input_shape)
 
 			generator_output = convLayer(generator_input, 64, (3, 3))
@@ -67,52 +71,61 @@ class model:
 			generator_output = convLayer(generator_output, 512, (3, 3))
 			generator_output = convLayer(generator_output, 512, (3, 3))
 			generator_output = BatchNormalization()(generator_output)
+			generator_output = Dropout(0.25)(generator_output)
 
 			generator_output = convLayer(generator_output, 512, (3, 3))
 			generator_output = convLayer(generator_output, 512, (3, 3))
 			generator_output = BatchNormalization()(generator_output)
+			generator_output = Dropout(0.25)(generator_output)
 
 			generator_output = UpSampling2D((2, 2))(generator_output) #not sure if this or deconvolution
 			generator_output = convLayer(generator_output, 256, (3, 3))
 			generator_output = BatchNormalization()(generator_output)
+			generator_output = Dropout(0.25)(generator_output)
 
 			generator_output = UpSampling2D((2, 2))(generator_output)
 			generator_output = convLayer(generator_output, 64, (3, 3))
 			generator_output = BatchNormalization()(generator_output)
 
 			generator_output = UpSampling2D((2, 2))(generator_output)
-			generator_output = Conv2D(2, (3, 3), activation="tanh", padding="same")(generator_output)
-			return Model(inputs=generator_input, outputs=generator_output)
+			generator_output = Conv2D(2, (1, 1), activation="tanh", padding="same")(generator_output)
+			generator = Model(inputs=generator_input, outputs=generator_output)
+			generator.compile(loss='binary_crossentropy', optimizer = Adam(lr=.0002, beta_1 = 0.5))
+			return generator
 
 		def build_discriminator():
+			if self.model_path is not None:
+				return load_model(os.path.join(self.model_path, "discriminator.h5"))
+		
 			discriminator_input = Input(self.discriminator_input_shape)
 			#128
 			discriminator_output = convLayer(discriminator_input, 32, (3, 3), stride=2, activation=None)
 			discriminator_output = LeakyReLU(0.2)(discriminator_output)
-			discriminator_output = BatchNormalization()(discriminator_output, training=False)
+			discriminator_output = BatchNormalization()(discriminator_output)
 			#64
 			discriminator_output = convLayer(discriminator_output, 16 , (3, 3), stride=2, activation=None)
 			discriminator_output = LeakyReLU(0.2)(discriminator_output)
-			discriminator_output = BatchNormalization()(discriminator_output, training=False)
+			discriminator_output = BatchNormalization()(discriminator_output)
 			discriminator_output = Dropout(0.25)(discriminator_output)
 			#32
 			discriminator_output = convLayer(discriminator_output, 16 , (3, 3), stride=2, activation=None)
 			discriminator_output = LeakyReLU(0.2)(discriminator_output)
-			discriminator_output = BatchNormalization()(discriminator_output, training=False)
+			discriminator_output = BatchNormalization()(discriminator_output)
 			discriminator_output = Dropout(0.25)(discriminator_output)
 			#16
 			discriminator_output = Flatten()(discriminator_output)
 			discriminator_output = Dense(1, activation="sigmoid")(discriminator_output)
 
-			return Model(inputs=discriminator_input, outputs=discriminator_output)
+			discriminator = Model(inputs=discriminator_input, outputs=discriminator_output)
+			discriminator.compile(loss='binary_crossentropy', optimizer = Adam(lr=.001, beta_1 = 0.5), metrics=['accuracy'])
+			return discriminator
 
 		self.generator = build_generator()
-		self.generator.compile(loss='binary_crossentropy', optimizer = Adam(lr=.001))
+		#maybe add another term to the loss, mse
 		print("-----------------------Generator-----------------------")
 		print(self.generator.summary())
 
 		self.discriminator = build_discriminator()
-		self.discriminator.compile(loss='binary_crossentropy', optimizer = Adam(lr=.0001), metrics=['accuracy'])
 		print("---------------------Discriminator---------------------")
 		print(self.discriminator.summary())
 
@@ -133,7 +146,7 @@ class model:
 		discriminator_judgement = self.discriminator(generated_colorization)
 
 		gan = Model(inputs=gan_input, outputs=discriminator_judgement)
-		gan.compile(loss='binary_crossentropy', optimizer = Adam(lr=.001))
+		gan.compile(loss='binary_crossentropy', optimizer = Adam(lr=.001, beta_1 = 0.5))
 		print("-------------------------GAN--------------------------")
 		print(gan.summary())
 		return gan
@@ -142,11 +155,13 @@ class model:
 		'''
 		This function will carry out the training of the gan, including the discriminator step
 		'''
-		batch_size = 8
-		self.output_path = self.output_path+"/"+datetime.datetime.now().strftime("%Y-%m-%d--%Hh%Mm")
-		# os.mkdir(self.output_path)
-		train_data_path = os.path.join(self.image_path, "Train_1")
-		validation_data_path = os.path.join(self.image_path, "Validation_1")
+		batch_size = 16
+		self.output_path = os.path.join(self.output_path,datetime.datetime.now().strftime("%Y-%m-%d--%Hh%Mm"))
+		os.mkdir(self.output_path)
+		os.mkdir(os.path.join(self.output_path, "images"))
+		self.writer = tf.summary.FileWriter(self.output_path)
+		train_data_path = os.path.join(self.image_path, "Train_small")
+		validation_data_path = os.path.join(self.image_path, "Train_small")
 
 		# partition = {"train": [], "validation": []}
 		# for image in os.listdir(train_data_path):
@@ -171,13 +186,16 @@ class model:
 		
 		datagen = image.ImageDataGenerator(rescale=(1./255))
 		val_datagen = image.ImageDataGenerator(rescale=(1./255))
-		epochs = 300
-		num_train_batches = 258500//batch_size
-		num_validation_batches = 10000//batch_size
-		# num_train_batches = 32//batch_size
-		# num_validation_batches = 32//batch_size
-		real_images_labels = np.ones((batch_size, 1))
-		generated_images_labels = np.zeros((batch_size, 1))
+		epochs = 112
+		disc_training_steps = 1
+		# num_train_batches = 258500//batch_size
+		# num_validation_batches = 10000//batch_size
+		num_train_batches = 32//batch_size
+		num_validation_batches = 32//batch_size
+
+		#one sided smoothing (https://arxiv.org/pdf/1606.03498.pdf)
+		real_images_labels = np.full((batch_size, 1), 0.9)
+		generated_images_labels = np.full((batch_size, 1), 0.1)
 		start_time = time.time()
 		def val_batch_generator(batch_size):
 		    for val_batch in val_datagen.flow_from_directory(validation_data_path,
@@ -203,31 +221,57 @@ class model:
 				Y_train = lab[:, :, :, 1:] / 128
 				generated_ab = self.generator.predict(X_train, steps=1)
 
-				disc_x_train = np.concatenate((Y_train, generated_ab), axis=0)
-				disc_y_train = np.concatenate((real_images_labels, generated_images_labels), axis=0)
-				shuffle_indices = np.arange(disc_x_train.shape[0])
-				np.random.shuffle(shuffle_indices)
-				disc_x_train_shuffled = np.squeeze(disc_x_train[shuffle_indices])
-				disc_y_train_shuffled = np.squeeze(disc_y_train[shuffle_indices])
-				disc_loss, disc_acc = self.discriminator.train_on_batch(disc_x_train_shuffled, disc_y_train_shuffled)
+				# disc_x_train = np.concatenate((Y_train, generated_ab), axis=0)
+				# disc_y_train = np.concatenate((real_images_labels, generated_images_labels), axis=0)
+				
+				# shuffle_indices = np.arange(disc_x_train.shape[0])
+				# np.random.shuffle(shuffle_indices)
+				
+				# disc_x_train_shuffled = np.squeeze(disc_x_train[shuffle_indices])
+				# disc_y_train_shuffled = np.squeeze(disc_y_train[shuffle_indices])
+				
+				#train on real batch then on fake batch (https://github.com/soumith/ganhacks/blob/master/README.md point 4)
+				#Set learning phase manually due to Dropout and BatchNormalization layers
+				K.set_learning_phase(1)
+				#TODO: maybe train whenever acc falls below a certain threshold (90?)
+				for i in range(disc_training_steps):
+					disc_loss_r, disc_acc_r = self.discriminator.train_on_batch(Y_train, real_images_labels)
+					disc_loss_f, disc_acc_f = self.discriminator.train_on_batch(generated_ab, generated_images_labels)
+				
+				disc_loss_summary = tf.Summary(value=[tf.Summary.Value(tag="disc_loss", simple_value=(disc_loss_r + disc_loss_f) / 2)])
+				# disc_acc_summary = tf.Summary(value=[tf.Summary.Value(tag="disc_acc", simple_value=(disc_acc_r + disc_acc_f) / 2)])
+				
 				gen_loss = model.train_on_batch(X_train, real_images_labels)
+				gen_loss_summary = tf.Summary(value=[tf.Summary.Value(tag="gen_loss", simple_value=gen_loss)])
+				
+				K.set_learning_phase(0)
+
+				current_step = (e) * num_train_batches + curr_batch
+				self.writer.add_summary(disc_loss_summary, current_step*disc_training_steps)
+				# self.writer.add_summary(disc_acc_summary, current_step*disc_training_steps)
+				self.writer.add_summary(gen_loss_summary, current_step)
 				curr_batch = curr_batch + 1
 				
-				sys.stdout.write("\r[Epoch %d/%d] [Batch %d/%d] [D loss: %f, acc: %f] [G loss: %f] Estimated time left: %s" % (e, epochs,
+				sys.stdout.write("\r[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f] Estimated time left: %s" % (e, epochs,
                                                                         curr_batch, num_train_batches,
-                                                                        disc_loss, disc_acc,
+                                                                        (disc_loss_r + disc_loss_f)/2,
                                                                         gen_loss,
                                                                         str(datetime.timedelta(seconds=((time.time() - start_time)/curr_batch) * (num_train_batches-curr_batch)))))
 				sys.stdout.flush()
 				if curr_batch >= num_train_batches:
-					print(str(self.discriminator.metrics_names) + " : " + str(self.discriminator.evaluate_generator(val_batch_generator(batch_size), steps=num_validation_batches)))
+					if e % 111 == 0:
+						print(str(self.discriminator.metrics_names) + " : " + str(self.discriminator.evaluate_generator(val_batch_generator(batch_size), steps=num_validation_batches)))
+						model.save(os.path.join(self.output_path, "model.h5"))
+						self.discriminator.save(os.path.join(self.output_path, "discriminator.h5"))
+						self.generator.save(os.path.join(self.output_path, "generator.h5"))
+
+						images = np.concatenate((X_train * 50 + 50, generated_ab*128), axis=3)
+						os.mkdir(os.path.join(self.output_path, "images", "epoch_{}".format(e)))
+						for i in range(batch_size):
+							curr_image = color.lab2rgb(images[i])
+							io.imsave(os.path.join(self.output_path, "images", "epoch_{}".format(e), "image_{}.jpg".format(i)), curr_image)
 					break
-				#TODO: validation
-				#TODO: record loss
 
 	def set_up_and_train(self):
-		if self.model_path is None:
-			model = self.set_up_model()
-		else:
-			model = load_model(self.model_path)
+		model = self.set_up_model()
 		self.train(model)

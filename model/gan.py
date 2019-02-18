@@ -140,7 +140,7 @@ class model:
 			discriminator_output = Dense(1, activation="sigmoid")(discriminator_output)
 
 			discriminator = Model(inputs=discriminator_input, outputs=discriminator_output)
-			discriminator.compile(loss='binary_crossentropy', optimizer = Adam(lr=.001, beta_1 = 0.5), metrics=['accuracy'])
+			discriminator.compile(loss='binary_crossentropy', optimizer = Adam(lr=.0002, beta_1 = 0.5), metrics=['accuracy'])
 			return discriminator
 
 		self.generator = build_generator()
@@ -168,8 +168,8 @@ class model:
 		self.discriminator.trainable = False
 		discriminator_judgement = self.discriminator(generated_colorization)
 
-		gan = Model(inputs=gan_input, outputs=discriminator_judgement)
-		gan.compile(loss='binary_crossentropy', optimizer = Adam(lr=.001, beta_1 = 0.5))
+		gan = Model(inputs=gan_input, outputs=[discriminator_judgement, generated_colorization])
+		gan.compile(loss=['binary_crossentropy', 'mae'], loss_weights=[1, 100], optimizer = Adam(lr=.0002, beta_1 = 0.5))
 		print("-------------------------GAN--------------------------")
 		print(gan.summary())
 		return gan
@@ -179,7 +179,7 @@ class model:
 		This function will carry out the training of the gan, including the discriminator step
 		'''
 		batch_size = 16
-		self.output_path = os.path.join(self.output_path, "full_u_net")#datetime.datetime.now().strftime("%Y-%m-%d--%Hh%Mm"))
+		self.output_path = os.path.join(self.output_path, "full_u_net_mse_loss_disc_1")#datetime.datetime.now().strftime("%Y-%m-%d--%Hh%Mm"))
 		os.mkdir(self.output_path)
 		os.mkdir(os.path.join(self.output_path, "images"))
 		self.writer = tf.summary.FileWriter(self.output_path)
@@ -209,7 +209,8 @@ class model:
 		
 		datagen = image.ImageDataGenerator(rescale=(1./255))
 		val_datagen = image.ImageDataGenerator(rescale=(1./255))
-		epochs = 1000
+		epochs = 2000
+		# TODO: Try with 2, 3
 		disc_training_steps = 1
 		# num_train_batches = 258500//batch_size
 		# num_validation_batches = 10000//batch_size
@@ -264,7 +265,7 @@ class model:
 				disc_loss_summary = tf.Summary(value=[tf.Summary.Value(tag="disc_loss", simple_value=(disc_loss_r + disc_loss_f) / 2)])
 				# disc_acc_summary = tf.Summary(value=[tf.Summary.Value(tag="disc_acc", simple_value=(disc_acc_r + disc_acc_f) / 2)])
 				
-				gen_loss = model.train_on_batch(X_train, real_images_labels)
+				gen_loss = model.train_on_batch(X_train, [real_images_labels, Y_train])[0]
 				gen_loss_summary = tf.Summary(value=[tf.Summary.Value(tag="gen_loss", simple_value=gen_loss)])
 				
 				K.set_learning_phase(0)
@@ -282,7 +283,7 @@ class model:
                                                                         str(datetime.timedelta(seconds=((time.time() - start_time)/curr_batch) * (num_train_batches-curr_batch)))))
 				sys.stdout.flush()
 				if curr_batch >= num_train_batches:
-					if e % 250 == 0:
+					if e % 500 == 0:
 						print(str(self.discriminator.metrics_names) + " : " + str(self.discriminator.evaluate_generator(val_batch_generator(batch_size), steps=num_validation_batches)))
 						model.save(os.path.join(self.output_path, "model.h5"))
 						self.discriminator.save(os.path.join(self.output_path, "discriminator.h5"))

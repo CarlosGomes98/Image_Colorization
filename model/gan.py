@@ -49,46 +49,69 @@ class model:
 		self.generator_input_shape = (128, 128, 1)
 		self.discriminator_input_shape = (128, 128, 2)
 
-		# Maybe switch to U-Net
+		# U-Net
 		def build_generator():
 			if self.model_path is not None:
 				return load_model(os.path.join(self.model_path, "generator.h5"))
 		
 			generator_input = Input(self.generator_input_shape)
+			# 128
+			conv_1 = convLayer(generator_input, 64, (4, 4))
+			conv_1 = BatchNormalization()(conv_1)
+			# 64
+			conv_2 = convLayer(conv_1, 64, (4, 4), stride=2)
+			conv_2 = BatchNormalization()(conv_2)
+			# 32
+			conv_3 = convLayer(conv_2, 128, (4, 4), stride=2)
+			conv_3 = BatchNormalization()(conv_3)
+			# 16
+			conv_4 = convLayer(conv_3, 256, (4, 4), stride=2)
+			conv_4 = BatchNormalization()(conv_4)
+			# 8
+			conv_5 = convLayer(conv_4, 512, (4, 4), stride=2)
+			conv_5 = BatchNormalization()(conv_5)
+			# 4
+			conv_6 = convLayer(conv_5, 512, (4, 4), stride=2)
+			conv_6 = BatchNormalization()(conv_6)
+			# 2
+			conv_7 = convLayer(conv_6, 512, (4, 4), stride=2)
+			conv_7 = BatchNormalization()(conv_7)
+			# 4
+			conv_8 = UpSampling2D((2, 2))(conv_7)
+			conv_8 = convLayer(conv_8, 512, (4, 4))
+			conv_8 = BatchNormalization()(conv_8)
+			conv_8 = Concatenate(axis=-1)([conv_6, conv_8])
+			# 8
+			conv_9 = UpSampling2D((2, 2))(conv_8)
+			conv_9 = convLayer(conv_9, 512, (4, 4))
+			conv_9 = BatchNormalization()(conv_9)
+			conv_9 = Concatenate(axis=-1)([conv_5, conv_9])
+			# 16
+			conv_10 = UpSampling2D((2, 2))(conv_9)
+			conv_10 = convLayer(conv_10, 512, (4, 4))
+			conv_10 = BatchNormalization()(conv_10)
+			conv_10 = Concatenate(axis=-1)([conv_4, conv_10])
+			# conv_10 = Dropout(0.25)(conv_10)
+			# 32
+			conv_11 = UpSampling2D((2, 2))(conv_10)
+			conv_11 = convLayer(conv_11, 256, (4, 4))
+			conv_11 = BatchNormalization()(conv_11)
+			conv_11 = Concatenate(axis=-1)([conv_3, conv_11])
+			# conv_11 = Dropout(0.25)(conv_11)
+			# 64
+			conv_12 = UpSampling2D((2, 2))(conv_11)
+			conv_12 = convLayer(conv_12, 128, (4, 4))
+			conv_12 = BatchNormalization()(conv_12)
+			conv_12 = Concatenate(axis=-1)([conv_2, conv_12])
+			# conv_12 = Dropout(0.25)(conv_12)
+			# 128
+			conv_13 = UpSampling2D((2, 2))(conv_12)
+			conv_13 = convLayer(conv_13, 64, (4, 4))
+			conv_13 = BatchNormalization()(conv_13)
+			conv_13 = Concatenate(axis=-1)([conv_1, conv_13])
 
-			generator_output = convLayer(generator_input, 64, (3, 3))
-			generator_output = convLayer(generator_output, 64, (3, 3), stride=2)
-			generator_output = BatchNormalization()(generator_output)
-
-			generator_output = convLayer(generator_output, 128, (3, 3))
-			generator_output = convLayer(generator_output, 128, (3, 3), stride=2)
-			generator_output = BatchNormalization()(generator_output)
-
-			generator_output = convLayer(generator_output, 256, (3, 3))
-			generator_output = convLayer(generator_output, 256, (3, 3), stride=2)
-			generator_output = BatchNormalization()(generator_output)
-
-			generator_output = convLayer(generator_output, 512, (3, 3))
-			generator_output = convLayer(generator_output, 512, (3, 3))
-			generator_output = BatchNormalization()(generator_output)
-			generator_output = Dropout(0.25)(generator_output)
-
-			generator_output = convLayer(generator_output, 512, (3, 3))
-			generator_output = convLayer(generator_output, 512, (3, 3))
-			generator_output = BatchNormalization()(generator_output)
-			generator_output = Dropout(0.25)(generator_output)
-
-			generator_output = UpSampling2D((2, 2))(generator_output) #not sure if this or deconvolution
-			generator_output = convLayer(generator_output, 256, (3, 3))
-			generator_output = BatchNormalization()(generator_output)
-			generator_output = Dropout(0.25)(generator_output)
-
-			generator_output = UpSampling2D((2, 2))(generator_output)
-			generator_output = convLayer(generator_output, 64, (3, 3))
-			generator_output = BatchNormalization()(generator_output)
-
-			generator_output = UpSampling2D((2, 2))(generator_output)
-			generator_output = Conv2D(2, (1, 1), activation="tanh", padding="same")(generator_output)
+			generator_output = Conv2D(2, (1, 1), activation="tanh", padding="same")(conv_13)
+			
 			generator = Model(inputs=generator_input, outputs=generator_output)
 			generator.compile(loss='binary_crossentropy', optimizer = Adam(lr=.0002, beta_1 = 0.5))
 			return generator
@@ -156,7 +179,7 @@ class model:
 		This function will carry out the training of the gan, including the discriminator step
 		'''
 		batch_size = 16
-		self.output_path = os.path.join(self.output_path,datetime.datetime.now().strftime("%Y-%m-%d--%Hh%Mm"))
+		self.output_path = os.path.join(self.output_path, "full_u_net")#datetime.datetime.now().strftime("%Y-%m-%d--%Hh%Mm"))
 		os.mkdir(self.output_path)
 		os.mkdir(os.path.join(self.output_path, "images"))
 		self.writer = tf.summary.FileWriter(self.output_path)
@@ -186,7 +209,7 @@ class model:
 		
 		datagen = image.ImageDataGenerator(rescale=(1./255))
 		val_datagen = image.ImageDataGenerator(rescale=(1./255))
-		epochs = 112
+		epochs = 1000
 		disc_training_steps = 1
 		# num_train_batches = 258500//batch_size
 		# num_validation_batches = 10000//batch_size
@@ -259,7 +282,7 @@ class model:
                                                                         str(datetime.timedelta(seconds=((time.time() - start_time)/curr_batch) * (num_train_batches-curr_batch)))))
 				sys.stdout.flush()
 				if curr_batch >= num_train_batches:
-					if e % 111 == 0:
+					if e % 250 == 0:
 						print(str(self.discriminator.metrics_names) + " : " + str(self.discriminator.evaluate_generator(val_batch_generator(batch_size), steps=num_validation_batches)))
 						model.save(os.path.join(self.output_path, "model.h5"))
 						self.discriminator.save(os.path.join(self.output_path, "discriminator.h5"))

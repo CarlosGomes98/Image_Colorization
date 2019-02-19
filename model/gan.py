@@ -179,7 +179,7 @@ class model:
 		This function will carry out the training of the gan, including the discriminator step
 		'''
 		batch_size = 16
-		self.output_path = os.path.join(self.output_path, "full_u_net_mse_loss_disc_1")#datetime.datetime.now().strftime("%Y-%m-%d--%Hh%Mm"))
+		self.output_path = os.path.join(self.output_path, "full_u_net_mse_loss_disc_3")#datetime.datetime.now().strftime("%Y-%m-%d--%Hh%Mm"))
 		os.mkdir(self.output_path)
 		os.mkdir(os.path.join(self.output_path, "images"))
 		self.writer = tf.summary.FileWriter(self.output_path)
@@ -211,7 +211,7 @@ class model:
 		val_datagen = image.ImageDataGenerator(rescale=(1./255))
 		epochs = 2000
 		# TODO: Try with 2, 3
-		disc_training_steps = 1
+		disc_training_steps = 3
 		# num_train_batches = 258500//batch_size
 		# num_validation_batches = 10000//batch_size
 		num_train_batches = 32//batch_size
@@ -219,7 +219,7 @@ class model:
 
 		#one sided smoothing (https://arxiv.org/pdf/1606.03498.pdf)
 		real_images_labels = np.full((batch_size, 1), 0.9)
-		generated_images_labels = np.full((batch_size, 1), 0.1)
+		generated_images_labels = np.full((batch_size, 1), 0)
 		start_time = time.time()
 		def val_batch_generator(batch_size):
 		    for val_batch in val_datagen.flow_from_directory(validation_data_path,
@@ -265,7 +265,7 @@ class model:
 				disc_loss_summary = tf.Summary(value=[tf.Summary.Value(tag="disc_loss", simple_value=(disc_loss_r + disc_loss_f) / 2)])
 				# disc_acc_summary = tf.Summary(value=[tf.Summary.Value(tag="disc_acc", simple_value=(disc_acc_r + disc_acc_f) / 2)])
 				
-				gen_loss = model.train_on_batch(X_train, [real_images_labels, Y_train])[0]
+				gen_loss = model.train_on_batch(X_train, [np.ones((batch_size, 1)), Y_train])[0]
 				gen_loss_summary = tf.Summary(value=[tf.Summary.Value(tag="gen_loss", simple_value=gen_loss)])
 				
 				K.set_learning_phase(0)

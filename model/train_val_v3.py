@@ -64,15 +64,17 @@ class model:
 	def train(self, model):
 		self.output_path = self.output_path+"/"+datetime.datetime.now().strftime("%Y-%m-%d--%Hh%Mm")
 		os.mkdir(self.output_path)
-		train_data_path = os.path.join(self.image_path, "Train_1", "Train")
-		validation_data_path = os.path.join(self.image_path, "Validation_1", "Validation")
+		train_data_path = os.path.join(self.image_path, "Train_small", "Train_small")
+		validation_data_path = os.path.join(self.image_path, "Train_small", "Train_small")
         # Download Train and Validation data
 		# os.system('gsutil -m cp -r ' + self.image_path + '/Train .')
 		# os.system('gsutil -m cp -r ' + self.image_path + '/Validation .')
 
 		batch_size = 16
-		num_train_batches = 258500//batch_size
-		num_validation_batches = 10000//batch_size
+		# num_train_batches = 258500//batch_size
+		# num_validation_batches = 10000//batch_size
+		num_train_batches = 32//batch_size
+		num_validation_batches = 32//batch_size
 		partition = {"train": [], "validation": []}
 		for image in os.listdir(train_data_path):
 			partition["train"].append(os.path.join(train_data_path, image))
@@ -119,7 +121,7 @@ class model:
 
 
 		tensorboard = TensorBoard(log_dir=self.output_path, histogram_freq=0, write_images=True)
-		callbacks = [tensorboard, checkpoint]
+		callbacks = [tensorboard]#, checkpoint]
 
         # Uncomment to continue previous training
         # model.load_weights("/content/drive/My Drive/app/output/2018-09-29 14:58/latest.hdf5")#manually change this, i know, i know
@@ -129,11 +131,11 @@ class model:
 		            metrics=['accuracy'])
 
 		model.fit(train_dataset.make_one_shot_iterator(),
-                  validation_data = validation_dataset.make_one_shot_iterator(),
+                  #validation_data = validation_dataset.make_one_shot_iterator(),
                   callbacks=callbacks,
                   steps_per_epoch=num_train_batches,
-                  validation_steps=num_validation_batches,
-                  epochs=5)
+                  #validation_steps=num_validation_batches,
+                  epochs=2000)
 
 		model.save(os.path.join(self.output_path, "model.h5"))
 

@@ -113,7 +113,7 @@ class model:
 			generator_output = Conv2D(2, (1, 1), activation="tanh", padding="same")(conv_13)
 			
 			generator = Model(inputs=generator_input, outputs=generator_output)
-			generator.compile(loss='binary_crossentropy', optimizer = Adam(lr=.0002, beta_1 = 0.5))
+			generator.compile(loss='binary_crossentropy', optimizer = Adam(lr=.0002, beta_1 = 0.7))
 			return generator
 
 		def build_discriminator():
@@ -121,30 +121,29 @@ class model:
 				return load_model(os.path.join(self.model_path, "discriminator.h5"))
 		
 			discriminator_input = Input(self.discriminator_input_shape)
-			#128
-			discriminator_output = convLayer(discriminator_input, 32, (3, 3), stride=2, activation=None)
-			discriminator_output = LeakyReLU(0.2)(discriminator_output)
-			discriminator_output = BatchNormalization()(discriminator_output)
 			#64
-			discriminator_output = convLayer(discriminator_output, 16 , (3, 3), stride=2, activation=None)
+			discriminator_output = convLayer(discriminator_input, 32, (4, 4), stride=2, activation=None)
 			discriminator_output = LeakyReLU(0.2)(discriminator_output)
 			discriminator_output = BatchNormalization()(discriminator_output)
-			discriminator_output = Dropout(0.25)(discriminator_output)
 			#32
-			discriminator_output = convLayer(discriminator_output, 16 , (3, 3), stride=2, activation=None)
+			discriminator_output = convLayer(discriminator_output, 64 , (4, 4), stride=2, activation=None)
 			discriminator_output = LeakyReLU(0.2)(discriminator_output)
 			discriminator_output = BatchNormalization()(discriminator_output)
 			discriminator_output = Dropout(0.25)(discriminator_output)
 			#16
+			discriminator_output = convLayer(discriminator_output, 128 , (4, 4), stride=2, activation=None)
+			discriminator_output = LeakyReLU(0.2)(discriminator_output)
+			discriminator_output = BatchNormalization()(discriminator_output)
+			discriminator_output = Dropout(0.25)(discriminator_output)
+
 			discriminator_output = Flatten()(discriminator_output)
 			discriminator_output = Dense(1, activation="sigmoid")(discriminator_output)
 
 			discriminator = Model(inputs=discriminator_input, outputs=discriminator_output)
-			discriminator.compile(loss='binary_crossentropy', optimizer = Adam(lr=.0002, beta_1 = 0.5), metrics=['accuracy'])
+			discriminator.compile(loss='binary_crossentropy', optimizer = Adam(lr=.0002, beta_1 = 0.7), metrics=['accuracy'])
 			return discriminator
 
 		self.generator = build_generator()
-		#maybe add another term to the loss, mse
 		print("-----------------------Generator-----------------------")
 		print(self.generator.summary())
 
@@ -169,7 +168,7 @@ class model:
 		discriminator_judgement = self.discriminator(generated_colorization)
 
 		gan = Model(inputs=gan_input, outputs=[discriminator_judgement, generated_colorization])
-		gan.compile(loss=['binary_crossentropy', 'mae'], loss_weights=[1, 100], optimizer = Adam(lr=.0002, beta_1 = 0.5))
+		gan.compile(loss=['binary_crossentropy', 'mse'], loss_weights=[1, 100], optimizer = Adam(lr=.0002, beta_1 = 0.7))
 		print("-------------------------GAN--------------------------")
 		print(gan.summary())
 		return gan
@@ -179,12 +178,12 @@ class model:
 		This function will carry out the training of the gan, including the discriminator step
 		'''
 		batch_size = 16
-		self.output_path = os.path.join(self.output_path, "full_u_net_mse_loss_disc_3")#datetime.datetime.now().strftime("%Y-%m-%d--%Hh%Mm"))
+		self.output_path = os.path.join(self.output_path, datetime.datetime.now().strftime("%Y-%m-%d--%Hh%Mm"))
 		os.mkdir(self.output_path)
 		os.mkdir(os.path.join(self.output_path, "images"))
 		self.writer = tf.summary.FileWriter(self.output_path)
-		train_data_path = os.path.join(self.image_path, "Train_small")
-		validation_data_path = os.path.join(self.image_path, "Train_small")
+		train_data_path = os.path.join(self.image_path, "Train_1")
+		validation_data_path = os.path.join(self.image_path, "Validation_1")
 
 		# partition = {"train": [], "validation": []}
 		# for image in os.listdir(train_data_path):
@@ -211,11 +210,11 @@ class model:
 		val_datagen = image.ImageDataGenerator(rescale=(1./255))
 		epochs = 2000
 		# TODO: Try with 2, 3
-		disc_training_steps = 3
-		# num_train_batches = 258500//batch_size
-		# num_validation_batches = 10000//batch_size
-		num_train_batches = 32//batch_size
-		num_validation_batches = 32//batch_size
+		disc_training_steps = 1
+		num_train_batches = 258500//batch_size
+		num_validation_batches = 10000//batch_size
+		# num_train_batches = 32//batch_size
+		# num_validation_batches = 32//batch_size
 
 		#one sided smoothing (https://arxiv.org/pdf/1606.03498.pdf)
 		real_images_labels = np.full((batch_size, 1), 0.9)
@@ -233,7 +232,8 @@ class model:
 				disc_x_val = np.concatenate((Y, generated_ab_val), axis=0)
 				disc_y_val = np.concatenate((real_images_labels, generated_images_labels), axis=0)
 				yield ([disc_x_val, disc_y_val])
-
+		
+		gen_loss = 0
 		for e in range(epochs):
 			curr_batch = 0
 			for batch in datagen.flow_from_directory(train_data_path,
@@ -258,42 +258,43 @@ class model:
 				#Set learning phase manually due to Dropout and BatchNormalization layers
 				K.set_learning_phase(1)
 				#TODO: maybe train whenever acc falls below a certain threshold (90?)
-				for i in range(disc_training_steps):
-					disc_loss_r, disc_acc_r = self.discriminator.train_on_batch(Y_train, real_images_labels)
-					disc_loss_f, disc_acc_f = self.discriminator.train_on_batch(generated_ab, generated_images_labels)
+				disc_loss_r, disc_acc_r = self.discriminator.train_on_batch(Y_train, real_images_labels)
+				disc_loss_f, disc_acc_f = self.discriminator.train_on_batch(generated_ab, generated_images_labels)
 				
 				disc_loss_summary = tf.Summary(value=[tf.Summary.Value(tag="disc_loss", simple_value=(disc_loss_r + disc_loss_f) / 2)])
 				# disc_acc_summary = tf.Summary(value=[tf.Summary.Value(tag="disc_acc", simple_value=(disc_acc_r + disc_acc_f) / 2)])
 				
-				gen_loss = model.train_on_batch(X_train, [np.ones((batch_size, 1)), Y_train])[0]
-				gen_loss_summary = tf.Summary(value=[tf.Summary.Value(tag="gen_loss", simple_value=gen_loss)])
+
+				# if curr_batch % 3 == 2:
+				gen_loss = model.train_on_batch(X_train, [np.ones((batch_size, 1)), Y_train])
+				gen_loss_summary = tf.Summary(value=[tf.Summary.Value(tag="gen_loss", simple_value=gen_loss[0])])
 				
 				K.set_learning_phase(0)
 
 				current_step = (e) * num_train_batches + curr_batch
 				self.writer.add_summary(disc_loss_summary, current_step*disc_training_steps)
 				# self.writer.add_summary(disc_acc_summary, current_step*disc_training_steps)
+				# if curr_batch % 3 == 2:
 				self.writer.add_summary(gen_loss_summary, current_step)
-				curr_batch = curr_batch + 1
 				
-				sys.stdout.write("\r[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f] Estimated time left: %s" % (e, epochs,
+				curr_batch = curr_batch + 1
+				sys.stdout.write("\r[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss_bin: %f loss_mse: %f loss: %f] Estimated time left: %s" % (e, epochs,
                                                                         curr_batch, num_train_batches,
                                                                         (disc_loss_r + disc_loss_f)/2,
-                                                                        gen_loss,
+                                                                        gen_loss[1], gen_loss[2], gen_loss[0],
                                                                         str(datetime.timedelta(seconds=((time.time() - start_time)/curr_batch) * (num_train_batches-curr_batch)))))
 				sys.stdout.flush()
 				if curr_batch >= num_train_batches:
-					if e % 500 == 0:
-						print(str(self.discriminator.metrics_names) + " : " + str(self.discriminator.evaluate_generator(val_batch_generator(batch_size), steps=num_validation_batches)))
-						model.save(os.path.join(self.output_path, "model.h5"))
-						self.discriminator.save(os.path.join(self.output_path, "discriminator.h5"))
-						self.generator.save(os.path.join(self.output_path, "generator.h5"))
+					print(str(self.discriminator.metrics_names) + " : " + str(self.discriminator.evaluate_generator(val_batch_generator(batch_size), steps=num_validation_batches)))
+					model.save(os.path.join(self.output_path, "model.h5"))
+					self.discriminator.save(os.path.join(self.output_path, "discriminator.h5"))
+					self.generator.save(os.path.join(self.output_path, "generator.h5"))
 
-						images = np.concatenate((X_train * 50 + 50, generated_ab*128), axis=3)
-						os.mkdir(os.path.join(self.output_path, "images", "epoch_{}".format(e)))
-						for i in range(batch_size):
-							curr_image = color.lab2rgb(images[i])
-							io.imsave(os.path.join(self.output_path, "images", "epoch_{}".format(e), "image_{}.jpg".format(i)), curr_image)
+					images = np.concatenate((X_train * 50 + 50, generated_ab*128), axis=3)
+					os.mkdir(os.path.join(self.output_path, "images", "epoch_{}".format(e)))
+					for i in range(batch_size):
+						curr_image = color.lab2rgb(images[i])
+						io.imsave(os.path.join(self.output_path, "images", "epoch_{}".format(e), "image_{}.jpg".format(i)), curr_image)
 					break
 
 	def set_up_and_train(self):

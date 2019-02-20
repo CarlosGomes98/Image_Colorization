@@ -7,3 +7,9 @@
 Deep Koalarization(fusion model) https://arxiv.org/pdf/1712.03400v1.pdf
 
 Pixel level Semantics Guided Image Colorization https://arxiv.org/pdf/1808.01597v1.pdf
+
+Gans tutorial https://arxiv.org/pdf/1701.00160.pdf
+
+DCGan https://arxiv.org/pdf/1511.06434.pdf
+
+Improved GAN techniques https://arxiv.org/pdf/1606.03498.pdf

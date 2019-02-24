@@ -59,7 +59,13 @@ class model:
 		model_output = UpSampling2D((2, 2))(model_output)
 		model_output = Conv2D(2, (3, 3), activation="tanh", padding="same")(model_output)
 
-		return Model(inputs=model_input, outputs=model_output)
+		model = Model(inputs=model_input, outputs=model_output)
+		
+		model.compile(loss='mean_squared_error',
+		            optimizer="adam",
+		            metrics=['accuracy'])
+
+		return model
 
 	def train(self, model):
 		self.output_path = self.output_path+"/"+datetime.datetime.now().strftime("%Y-%m-%d--%Hh%Mm")
@@ -134,10 +140,6 @@ class model:
         # Uncomment to continue previous training
         # model.load_weights("/content/drive/My Drive/app/output/2018-09-29 14:58/latest.hdf5")#manually change this, i know, i know
 
-		model.compile(loss='mean_squared_error',
-		            optimizer="adam",
-		            metrics=['accuracy'])
-
 		model.fit(train_dataset.make_one_shot_iterator(),
                   validation_data = validation_dataset.make_one_shot_iterator(),
                   callbacks=callbacks,
@@ -164,5 +166,8 @@ class model:
 	# 	    io.imsave(self.output_path + "/" + str(i) + ".png", color.lab2rgb(cur))
 
 	def set_up_and_train(self):
-		model = self.set_up_model()
+		if self.model_path is not None:
+			model = load_model(self.model_path)
+		else:
+			model = self.set_up_model()
 		self.train(model)

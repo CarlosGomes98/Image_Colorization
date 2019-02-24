@@ -41,7 +41,7 @@ def parse_function(filename):
 def mse_parse_function(filename):
     image_string = tf.read_file(filename)
     image = tf.image.decode_jpeg(image_string, channels=3)
-    image = tf.image.resize_images(image, [256, 256])
+    # image = tf.image.resize_images(image, [256, 256])
     image_lab = tf.py_func(rgb2lab_32, [image], tf.float32)
     image_lab = tf.reshape(image_lab, [256, 256, 3])
     image_L = tf.py_func(preprocess_and_return_X, [image_lab], tf.float32)

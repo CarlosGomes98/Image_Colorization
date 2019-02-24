@@ -59,13 +59,13 @@ class model:
 			conv_1 = convLayer(generator_input, 64, (4, 4))
 			conv_1 = BatchNormalization()(conv_1)
 			# 64
-			conv_2 = convLayer(conv_1, 64, (4, 4), stride=2)
+			conv_2 = convLayer(conv_1, 128, (4, 4), stride=2)
 			conv_2 = BatchNormalization()(conv_2)
 			# 32
-			conv_3 = convLayer(conv_2, 128, (4, 4), stride=2)
+			conv_3 = convLayer(conv_2, 256, (4, 4), stride=2)
 			conv_3 = BatchNormalization()(conv_3)
 			# 16
-			conv_4 = convLayer(conv_3, 256, (4, 4), stride=2)
+			conv_4 = convLayer(conv_3, 512, (4, 4), stride=2)
 			conv_4 = BatchNormalization()(conv_4)
 			# 8
 			conv_5 = convLayer(conv_4, 512, (4, 4), stride=2)
@@ -113,7 +113,7 @@ class model:
 			generator_output = Conv2D(2, (1, 1), activation="tanh", padding="same")(conv_13)
 			
 			generator = Model(inputs=generator_input, outputs=generator_output)
-			generator.compile(loss='binary_crossentropy', optimizer = Adam(lr=.0002, beta_1 = 0.7))
+			generator.compile(loss='binary_crossentropy', optimizer = Adam(lr=.0002, beta_1 = 0.5))
 			return generator
 
 		def build_discriminator():
@@ -140,7 +140,7 @@ class model:
 			discriminator_output = Dense(1, activation="sigmoid")(discriminator_output)
 
 			discriminator = Model(inputs=discriminator_input, outputs=discriminator_output)
-			discriminator.compile(loss='binary_crossentropy', optimizer = Adam(lr=.0002, beta_1 = 0.7), metrics=['accuracy'])
+			discriminator.compile(loss='binary_crossentropy', optimizer = Adam(lr=.0002, beta_1 = 0.5), metrics=['accuracy'])
 			return discriminator
 
 		self.generator = build_generator()
@@ -168,7 +168,7 @@ class model:
 		discriminator_judgement = self.discriminator(generated_colorization)
 
 		gan = Model(inputs=gan_input, outputs=[discriminator_judgement, generated_colorization])
-		gan.compile(loss=['binary_crossentropy', 'mse'], loss_weights=[1, 100], optimizer = Adam(lr=.0002, beta_1 = 0.7))
+		gan.compile(loss=['binary_crossentropy', 'mse'], loss_weights=[1, 100], optimizer = Adam(lr=.0002, beta_1 = 0.5))
 		print("-------------------------GAN--------------------------")
 		print(gan.summary())
 		return gan
@@ -230,7 +230,7 @@ class model:
 				Y = val_lab[:, :, :, 1:] / 128
 				generated_ab_val = self.generator.predict(X, steps=1)
 				disc_x_val = np.concatenate((Y, generated_ab_val), axis=0)
-				disc_y_val = np.concatenate((real_images_labels, generated_images_labels), axis=0)
+				disc_y_val = np.concatenate((np.ones((batch_size, 1)), np.zeros((batch_size, 1))), axis=0)
 				yield ([disc_x_val, disc_y_val])
 		
 		gen_loss = 0
@@ -265,17 +265,17 @@ class model:
 				# disc_acc_summary = tf.Summary(value=[tf.Summary.Value(tag="disc_acc", simple_value=(disc_acc_r + disc_acc_f) / 2)])
 				
 
-				# if curr_batch % 3 == 2:
-				gen_loss = model.train_on_batch(X_train, [np.ones((batch_size, 1)), Y_train])
-				gen_loss_summary = tf.Summary(value=[tf.Summary.Value(tag="gen_loss", simple_value=gen_loss[0])])
+				if curr_batch % 3 == 2:
+					gen_loss = model.train_on_batch(X_train, [np.ones((batch_size, 1)), Y_train])
+					gen_loss_summary = tf.Summary(value=[tf.Summary.Value(tag="gen_loss", simple_value=gen_loss[0])])
 				
 				K.set_learning_phase(0)
 
 				current_step = (e) * num_train_batches + curr_batch
 				self.writer.add_summary(disc_loss_summary, current_step*disc_training_steps)
 				# self.writer.add_summary(disc_acc_summary, current_step*disc_training_steps)
-				# if curr_batch % 3 == 2:
-				self.writer.add_summary(gen_loss_summary, current_step)
+				if curr_batch % 3 == 2:
+					self.writer.add_summary(gen_loss_summary, current_step)
 				
 				curr_batch = curr_batch + 1
 				sys.stdout.write("\r[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss_bin: %f loss_mse: %f loss: %f] Estimated time left: %s" % (e, epochs,

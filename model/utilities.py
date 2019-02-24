@@ -29,7 +29,8 @@ def rgb2lab_32(image):
 
 def parse_function(filename):
     image_string = tf.read_file(filename)
-    image = tf.image.decode_jpeg(image_string, ratio=2, channels=3)
+    image = tf.image.decode_jpeg(image_string, channels=3)
+    image = tf.image.resize_images(image, [128, 128])
     image_lab = tf.py_func(rgb2lab_32, [image], tf.float32)
     image_L = tf.py_func(preprocess_and_return_X, [image_lab], tf.float32)
     image_L = tf.reshape(image_L, [128, 128, 1])
@@ -40,6 +41,7 @@ def parse_function(filename):
 def mse_parse_function(filename):
     image_string = tf.read_file(filename)
     image = tf.image.decode_jpeg(image_string, channels=3)
+    image = tf.image.resize_images(image, [256, 256])
     image_lab = tf.py_func(rgb2lab_32, [image], tf.float32)
     image_lab = tf.reshape(image_lab, [256, 256, 3])
     image_L = tf.py_func(preprocess_and_return_X, [image_lab], tf.float32)
@@ -49,7 +51,8 @@ def mse_parse_function(filename):
 
 def mse_parse_function_gan(filename):
     image_string = tf.read_file(filename)
-    image = tf.image.decode_jpeg(image_string, ratio=2, channels=3)
+    image = tf.image.decode_jpeg(image_string, channels=3)
+    image = tf.image.resize_images(image, [128, 128])
     image_lab = tf.py_func(rgb2lab_32, [image], tf.float32)
     image_lab = tf.reshape(image_lab, [128, 128, 3])
     image_L = tf.py_func(preprocess_and_return_X, [image_lab], tf.float32)

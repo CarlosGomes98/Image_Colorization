@@ -27,15 +27,15 @@ class model:
 		input_shape = (image_size, image_size, 1)
 
 		model_input = Input(shape = input_shape)
-
+		# 256 => 128
 		model_output = convLayer(model_input, 64, (3, 3))
 		model_output = convLayer(model_output, 64, (3, 3), stride=2)
 		model_output = BatchNormalization()(model_output)
-
+		# 128 => 64
 		model_output = convLayer(model_output, 128, (3, 3))
 		model_output = convLayer(model_output, 128, (3, 3), stride=2)
 		model_output = BatchNormalization()(model_output)
-
+		# 64 => 32
 		model_output = convLayer(model_output, 256, (3, 3))
 		model_output = convLayer(model_output, 256, (3, 3), stride=2)
 		model_output = BatchNormalization()(model_output)
@@ -47,17 +47,18 @@ class model:
 		model_output = convLayer(model_output, 512, (3, 3))
 		model_output = convLayer(model_output, 512, (3, 3))
 		model_output = BatchNormalization()(model_output)
-
+		# 32 => 64
 		model_output = UpSampling2D((2, 2))(model_output)
 		model_output = convLayer(model_output, 256, (3, 3))
 		model_output = BatchNormalization()(model_output)
-
+		# 64 => 128
+		model_output = UpSampling2D((2, 2))(model_output)
+		model_output = convLayer(model_output, 128, (3, 3))
+		model_output = BatchNormalization()(model_output)
+		# 128 => 256
 		model_output = UpSampling2D((2, 2))(model_output)
 		model_output = convLayer(model_output, 64, (3, 3))
-		model_output = BatchNormalization()(model_output)
-
-		model_output = UpSampling2D((2, 2))(model_output)
-		model_output = Conv2D(2, (3, 3), activation="tanh", padding="same")(model_output)
+		model_output = Conv2D(2, (1, 1), activation="tanh", padding="same")(model_output)
 
 		model = Model(inputs=model_input, outputs=model_output)
 		

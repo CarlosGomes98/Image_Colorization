@@ -9,7 +9,7 @@ Options:
 from docopt import docopt
 import os
 import zipfile
-from train_val_v3 import model
+from train_val_class_flowers import model
 
 if __name__ == '__main__':
     arguments = docopt(__doc__)

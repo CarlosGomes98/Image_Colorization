@@ -10,7 +10,8 @@ import tensorflow as tf
 import os
 image_size = 128
 buckets = np.load("model/pts_in_hull.npy")
-rebalance = np.load("model/rebalance.npy")
+# rebalance = np.load("model/rebalance.npy")
+rebalance = None
 nearest_neighbors = nn.NearestNeighbors(n_neighbors=5, algorithm="ball_tree").fit(buckets)
 # def read_image(img_id, dir):
 #     try:
@@ -27,10 +28,21 @@ def show_image(image):
 def rgb2lab_32(image):
     return color.rgb2lab(image).astype(np.float32)
 
-def parse_function(filename):
+def parse_image(filename):
     image_string = tf.read_file(filename)
-    image = tf.image.decode_jpeg(image_string, channels=3)
-    image = tf.image.resize_images(image, [128, 128])
+    image = tf.image.decode_jpeg(image_string, ratio=2, channels=3)
+    image = tf.image.convert_image_dtype(image, tf.float32)
+    return image
+    
+def augment_image(image):
+    image = tf.image.random_flip_left_right(image)
+    image = tf.image.random_brightness(image, max_delta=32.0 / 255.0)
+    image = tf.image.random_saturation(image, lower=0.5, upper=1.5)
+    # Make sure the image is still in [0, 1]
+    image = tf.clip_by_value(image, 0.0, 1.0)
+    return image
+
+def bucketize_image(image):
     image_lab = tf.py_func(rgb2lab_32, [image], tf.float32)
     image_L = tf.py_func(preprocess_and_return_X, [image_lab], tf.float32)
     image_L = tf.reshape(image_L, [128, 128, 1])

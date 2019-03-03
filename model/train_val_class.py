@@ -11,7 +11,7 @@ from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, Callback
 from sklearn.model_selection import train_test_split
 from DataGeneratorImages import DataGenerator
 from tensorflow.python.client import device_lib
-from utilities import parse_function
+from utilities import parse_image, bucketize_image, augment_image
 print(device_lib.list_local_devices())
 
 image_size = 128
@@ -100,8 +100,8 @@ class model:
     def train(self, model):
         self.output_path = self.output_path+"/"+datetime.datetime.now().strftime("%Y-%m-%d--%Hh%Mm")
         os.mkdir(self.output_path)
-        train_data_path = os.path.join(self.image_path, "Train")
-        validation_data_path = os.path.join(self.image_path, "Validation")
+        train_data_path = os.path.join(self.image_path, "flowers", "flowers")
+        validation_data_path = os.path.join(self.image_path, "flowers_val", "flowers_val")
 
         batch_size = 16
 
@@ -114,20 +114,26 @@ class model:
 
         train_dataset = tf.data.Dataset.from_tensor_slices(partition["train"])
         train_dataset = train_dataset.apply(tf.data.experimental.shuffle_and_repeat(len(partition["train"])))
-        train_dataset = train_dataset.map(parse_function, num_parallel_calls=8)
+        train_dataset = train_dataset.map(parse_image, num_parallel_calls=8)
+        train_dataset = train_dataset.map(augment_image, num_parallel_calls=8)
+        train_dataset = train_dataset.map(bucketize_image, num_parallel_calls=8)
         train_dataset = train_dataset.batch(batch_size)
         train_dataset = train_dataset.prefetch(1)
 
         validation_dataset = tf.data.Dataset.from_tensor_slices(partition["validation"])
-        validation_dataset = validation_dataset.shuffle(len(partition["validation"]))
-        validation_dataset = validation_dataset.map(parse_function, num_parallel_calls=4).repeat()
+        validation_dataset = validation_dataset.apply(tf.data.experimental.shuffle_and_repeat(len(partition["validation"])))
+        validation_dataset = validation_dataset.map(parse_image, num_parallel_calls=8)
+        validation_dataset = validation_dataset.map(bucketize_image, num_parallel_calls=8)
         validation_dataset = validation_dataset.batch(batch_size)
         validation_dataset = validation_dataset.prefetch(1)
+
         buckets = np.load("model/pts_in_hull.npy")
-        rebalance = np.load("model/rebalance.npy")
+        # rebalance = np.load("model/rebalance.npy")
         # num_train_batches = 4039
-        num_train_batches = 258500//batch_size
-        num_validation_batches = 10000//batch_size
+        # num_train_batches = 258500//batch_size
+        # num_validation_batches = 10000//batch_size
+        num_train_batches = 7189//batch_size
+        num_validation_batches = 1000//batch_size
         model.summary()
 
         class WeightsSaver(Callback):
@@ -153,6 +159,14 @@ class model:
                                     save_best_only=False,
                                     mode="auto",
                                     period=1)
+        
+        checkpoint_best = ModelCheckpoint(os.path.join(self.output_path, "best.hdf5"),
+                                    monitor="val_loss",
+                                    verbose=1,
+                                    save_weights_only = False,
+                                    save_best_only=True,
+                                    mode="auto",
+                                    period=1)
 
         # every_epoch = WeightsSaver(num_train_batches, self.output_path)
 
@@ -164,14 +178,14 @@ class model:
         #                           period=5)
 
         tensorboard = TensorBoard(log_dir=self.output_path, histogram_freq=0, write_images=True)
-        callbacks = [tensorboard, checkpoint]
+        callbacks = [tensorboard, checkpoint, checkpoint_best]
 
         model.fit(train_dataset.make_one_shot_iterator(),
                   validation_data = validation_dataset.make_one_shot_iterator(),
                   callbacks=callbacks,
                   steps_per_epoch=num_train_batches,
                   validation_steps=num_validation_batches,
-                  epochs=3)
+                  epochs=40)
 
         model.save(os.path.join(self.output_path, "model.h5"))
 

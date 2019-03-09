@@ -69,7 +69,7 @@ class model:
 		return model
 
 	def train(self, model):
-		self.output_path = self.output_path+"/"+datetime.datetime.now().strftime("%Y-%m-%d--%Hh%Mm")
+		self.output_path = self.output_path+"/flowers"#+datetime.datetime.now().strftime("%Y-%m-%d--%Hh%Mm")
 		os.mkdir(self.output_path)
 		train_data_path = os.path.join(self.image_path, "flowers", "flowers")
 		validation_data_path = os.path.join(self.image_path, "flowers_val", "flowers_val")

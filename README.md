@@ -6,20 +6,20 @@ My Third Year Project for the BSc in Computer Science where I investigate automa
 
 This repository contains several implementations of methods to preform colorization:
 
-  1. A deep CNN with a MSE loss
+  #### 1. A deep CNN with a MSE loss
   
   ![demo](https://raw.githubusercontent.com/CarlosGomes98/Image_Colorization/master/diagrams/MSE.png)
 
   
-  2. A deep CNN using categorical cross entropy loss (Based on http://richzhang.github.io/colorization/)
+  #### 2. A deep CNN using categorical cross entropy loss (Based on http://richzhang.github.io/colorization/)
   
   ![demo](https://raw.githubusercontent.com/CarlosGomes98/Image_Colorization/master/diagrams/class.jpg)
 
-  3. A GAN
+  #### 3. A GAN
   
-  # Generator
+  ##### Generator
   ![demo](https://raw.githubusercontent.com/CarlosGomes98/Image_Colorization/master/diagrams/generator.png)
-  # Discriminator
+  ##### Discriminator
   ![demo](https://raw.githubusercontent.com/CarlosGomes98/Image_Colorization/master/diagrams/discriminator.png)
 
   

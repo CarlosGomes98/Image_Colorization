@@ -1,7 +1,7 @@
 from setuptools import find_packages
 from setuptools import setup
 
-REQUIRED_PACKAGES = ['keras', 'numpy', 'scikit-image', 'docopt', 'requests==2.18.4']
+REQUIRED_PACKAGES = ['keras', 'numpy', 'scikit-image', 'docopt', 'requests==2.20.0']
 
 setup(
     name='model.train_val_class',
